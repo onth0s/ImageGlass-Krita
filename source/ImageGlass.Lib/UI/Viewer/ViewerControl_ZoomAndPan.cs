@@ -52,11 +52,8 @@ public partial class ViewerControl
     /// </summary>
     internal bool ApplySharedZoomState(Photo? photo)
     {
-        if (!Core.Config.EnableSharedZoom || photo is null || string.IsNullOrEmpty(photo.FilePath))
+        if (!Core.Config.EnableSharedZoom || _isPreviewing || photo is null || string.IsNullOrEmpty(photo.FilePath) || photo.State != PhotoState.Loaded)
         {
-            _sharedZoomDir = null;
-            _sharedZoomSavedFactor = null;
-            _sharedZoomSavedPanNormalized = null;
             return false;
         }
 
@@ -88,6 +85,7 @@ public partial class ViewerControl
                     _sharedZoomSavedPanNormalized.Value.Y * maxPanY);
             }
 
+            CalculateDrawingRegion();
             return true;
         }
 

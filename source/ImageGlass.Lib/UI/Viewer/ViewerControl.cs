@@ -524,6 +524,10 @@ public partial class ViewerControl : PhControl
             {
                 SetZoomMode(null, isManualZoom, zoomedByResizing);
             }
+            else
+            {
+                CalculateDrawingRegion();
+            }
 
             InvalidateVisual();
         });
