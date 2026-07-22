@@ -43,8 +43,8 @@ public partial class ViewerControl
 
     // Shared Zoom state
     private string? _sharedZoomDir = null;
-    private double? _sharedZoomSavedFactor = null;
-    private Point? _sharedZoomSavedPanNormalized = null;
+    private double? _sharedZoomSavedRatio = null; // ratio relative to AutoFit
+    private Point? _sharedZoomSavedCenterNormalized = null; // (u, v) normalized center point in [0, 1]
 
     /// <summary>
     /// Checks and applies directory-scoped shared zoom state on photo change.
@@ -61,28 +61,61 @@ public partial class ViewerControl
         if (!string.Equals(_sharedZoomDir, newDir, StringComparison.OrdinalIgnoreCase))
         {
             _sharedZoomDir = newDir;
-            _sharedZoomSavedFactor = null;
-            _sharedZoomSavedPanNormalized = null;
+            _sharedZoomSavedRatio = null;
+            _sharedZoomSavedCenterNormalized = null;
             return false;
         }
 
-        if (_sharedZoomSavedFactor.HasValue)
+        if (_sharedZoomSavedRatio.HasValue && !BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
         {
-            _zooming.Factor = _sharedZoomSavedFactor.Value;
+            // 1. Calculate AutoFit factor for this specific photo
+            var autoFitFactor = CalculateZoomFactor(ZoomMode.AutoZoom, BitmapSize.Width, BitmapSize.Height);
+
+            // 2. Scale zoom factor by relative ratio
+            _zooming.Factor = _sharedZoomSavedRatio.Value * autoFitFactor;
             _zooming.IsManual = true;
 
-            if (_sharedZoomSavedPanNormalized.HasValue && !BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
+            var zFactor = _zooming.Factor / Dpi;
+            var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
+            var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
+
+            // 3. Restore normalized center point (u, v)
+            if (_sharedZoomSavedCenterNormalized.HasValue)
             {
-                var zFactor = _zooming.Factor / Dpi;
-                var viewW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
-                var viewH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
+                var u = _sharedZoomSavedCenterNormalized.Value.X;
+                var v = _sharedZoomSavedCenterNormalized.Value.Y;
 
-                var maxPanX = Math.Max(0, BitmapSize.Width - viewW / zFactor);
-                var maxPanY = Math.Max(0, BitmapSize.Height - viewH / zFactor);
+                var imgCenterX = u * BitmapSize.Width;
+                var imgCenterY = v * BitmapSize.Height;
 
-                _logicalSrcPoint = new Point(
-                    _sharedZoomSavedPanNormalized.Value.X * maxPanX,
-                    _sharedZoomSavedPanNormalized.Value.Y * maxPanY);
+                var scaledImgW = BitmapSize.Width * zFactor;
+                var scaledImgH = BitmapSize.Height * zFactor;
+
+                double targetSrcX;
+                if (scaledImgW > controlW)
+                {
+                    targetSrcX = imgCenterX - (controlW / (2.0 * zFactor));
+                    var maxSrcX = Math.Max(0, BitmapSize.Width - controlW / zFactor);
+                    targetSrcX = Math.Clamp(targetSrcX, 0, maxSrcX);
+                }
+                else
+                {
+                    targetSrcX = 0;
+                }
+
+                double targetSrcY;
+                if (scaledImgH > controlH)
+                {
+                    targetSrcY = imgCenterY - (controlH / (2.0 * zFactor));
+                    var maxSrcY = Math.Max(0, BitmapSize.Height - controlH / zFactor);
+                    targetSrcY = Math.Clamp(targetSrcY, 0, maxSrcY);
+                }
+                else
+                {
+                    targetSrcY = 0;
+                }
+
+                _logicalSrcPoint = new Point(targetSrcX, targetSrcY);
             }
 
             CalculateDrawingRegion();
@@ -93,31 +126,55 @@ public partial class ViewerControl
     }
 
     /// <summary>
-    /// Captures the current zoom and normalized pan state for Shared Zoom.
+    /// Captures the current zoom ratio and normalized center point for Shared Zoom.
     /// </summary>
     internal void CaptureSharedZoomState()
     {
         if (!Core.Config.EnableSharedZoom || _isPreviewing || Photo is null || string.IsNullOrEmpty(Photo.FilePath) || Photo.State != PhotoState.Loaded)
             return;
 
+        if (BitmapSize.IsEmpty || BitmapSize.Width <= 0 || BitmapSize.Height <= 0)
+            return;
+
         var currentDir = System.IO.Path.GetDirectoryName(Photo.FilePath);
         _sharedZoomDir = currentDir;
-        _sharedZoomSavedFactor = _zooming.Factor;
 
-        if (!BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
+        // 1. Capture relative zoom ratio (Factor / AutoFit)
+        var autoFitFactor = CalculateZoomFactor(ZoomMode.AutoZoom, BitmapSize.Width, BitmapSize.Height);
+        _sharedZoomSavedRatio = autoFitFactor > 0 ? _zooming.Factor / autoFitFactor : 1.0;
+
+        // 2. Capture normalized center point (u, v)
+        var zFactor = _zooming.Factor / Dpi;
+        var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
+        var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
+
+        var scaledImgW = BitmapSize.Width * zFactor;
+        var scaledImgH = BitmapSize.Height * zFactor;
+
+        double centerImgX;
+        if (scaledImgW > controlW)
         {
-            var zFactor = _zooming.Factor / Dpi;
-            var viewW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
-            var viewH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
-
-            var maxPanX = Math.Max(0, BitmapSize.Width - viewW / zFactor);
-            var maxPanY = Math.Max(0, BitmapSize.Height - viewH / zFactor);
-
-            var normX = maxPanX > 0 ? Math.Clamp(_logicalSrcPoint.X / maxPanX, 0, 1) : 0;
-            var normY = maxPanY > 0 ? Math.Clamp(_logicalSrcPoint.Y / maxPanY, 0, 1) : 0;
-
-            _sharedZoomSavedPanNormalized = new Point(normX, normY);
+            centerImgX = _logicalSrcPoint.X + (controlW / (2.0 * zFactor));
         }
+        else
+        {
+            centerImgX = BitmapSize.Width / 2.0;
+        }
+
+        double centerImgY;
+        if (scaledImgH > controlH)
+        {
+            centerImgY = _logicalSrcPoint.Y + (controlH / (2.0 * zFactor));
+        }
+        else
+        {
+            centerImgY = BitmapSize.Height / 2.0;
+        }
+
+        var u = Math.Clamp(centerImgX / BitmapSize.Width, 0, 1);
+        var v = Math.Clamp(centerImgY / BitmapSize.Height, 0, 1);
+
+        _sharedZoomSavedCenterNormalized = new Point(u, v);
     }
 
 
