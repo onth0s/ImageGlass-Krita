@@ -1,0 +1,35 @@
+# Visual Studio & .NET Build Artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Pp]ublish/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+*.nupkg
+
+# IDE & Editor files
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*~
+
+# Test Files & Media (prevent tracking multi-megabyte test .kra files if committing root repo)
+# KRA/*.kra
+
+# OS Generated Files
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.log
