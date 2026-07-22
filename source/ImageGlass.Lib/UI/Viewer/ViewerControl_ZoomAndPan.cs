@@ -76,9 +76,16 @@ public partial class ViewerControl
 
             if (_sharedZoomSavedPanNormalized.HasValue && !BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
             {
+                var zFactor = _zooming.Factor / Dpi;
+                var viewW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
+                var viewH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
+
+                var maxPanX = Math.Max(0, BitmapSize.Width - viewW / zFactor);
+                var maxPanY = Math.Max(0, BitmapSize.Height - viewH / zFactor);
+
                 _logicalSrcPoint = new Point(
-                    _sharedZoomSavedPanNormalized.Value.X * BitmapSize.Width,
-                    _sharedZoomSavedPanNormalized.Value.Y * BitmapSize.Height);
+                    _sharedZoomSavedPanNormalized.Value.X * maxPanX,
+                    _sharedZoomSavedPanNormalized.Value.Y * maxPanY);
             }
 
             return true;
@@ -101,9 +108,17 @@ public partial class ViewerControl
 
         if (!BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
         {
-            _sharedZoomSavedPanNormalized = new Point(
-                _logicalSrcPoint.X / BitmapSize.Width,
-                _logicalSrcPoint.Y / BitmapSize.Height);
+            var zFactor = _zooming.Factor / Dpi;
+            var viewW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
+            var viewH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
+
+            var maxPanX = Math.Max(0, BitmapSize.Width - viewW / zFactor);
+            var maxPanY = Math.Max(0, BitmapSize.Height - viewH / zFactor);
+
+            var normX = maxPanX > 0 ? Math.Clamp(_logicalSrcPoint.X / maxPanX, 0, 1) : 0;
+            var normY = maxPanY > 0 ? Math.Clamp(_logicalSrcPoint.Y / maxPanY, 0, 1) : 0;
+
+            _sharedZoomSavedPanNormalized = new Point(normX, normY);
         }
     }
 
