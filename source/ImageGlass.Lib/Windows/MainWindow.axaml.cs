@@ -243,8 +243,19 @@ public partial class MainWindow : PhWindow
 
     private void Status_Changed(object? sender, EventArgs e)
     {
-        var time = Core.BuildInfo?.BuildTime;
-        VM.Title = _status.Text + (string.IsNullOrEmpty(time) ? "" : $" [{time}]");
+        var title = _status.Text;
+#if DEBUG
+        if (!string.IsNullOrEmpty(Core.BuildInfo?.BuildTime))
+        {
+            title += $" [{Core.BuildInfo.BuildTime}]";
+        }
+#else
+        if (Core.Config.EnableDebug && !string.IsNullOrEmpty(Core.BuildInfo?.BuildTime))
+        {
+            title += $" [{Core.BuildInfo.BuildTime}]";
+        }
+#endif
+        VM.Title = title;
     }
 
 
