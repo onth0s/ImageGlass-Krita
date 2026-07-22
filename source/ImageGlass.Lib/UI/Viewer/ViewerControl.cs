@@ -38,6 +38,7 @@ public partial class ViewerControl : PhControl
 {
     private CancellationTokenSource? _cancelPreview;
     internal InterlockedBool _isPreviewing = new(false);
+    private bool _sharedZoomJustApplied = false;
     internal InterlockedBool _isFirstDraw = new(false);
     internal PhotoLoadingOptions _loadingOptions = new();
 
@@ -516,15 +517,31 @@ public partial class ViewerControl : PhControl
     /// </summary>
     public void Refresh(bool resetZoom = true, bool isManualZoom = false, bool zoomedByResizing = false)
     {
+        // Snapshot the flag before the Post, so the closure captures the correct value.
+        // If ApplySharedZoomState was already called by the caller (e.g. HandlePhotoLoadedAsync),
+        // skip calling it again here — a second Apply would use stale saved state.
+        var sharedZoomAlreadyApplied = _sharedZoomJustApplied;
+        _sharedZoomJustApplied = false;
+
         Dispatcher.UIThread.Post(() =>
         {
-            var isSharedZoomApplied = ApplySharedZoomState(Photo);
+            bool isSharedZoomApplied;
+            if (sharedZoomAlreadyApplied)
+            {
+                // Already applied by caller — just recalculate rects without touching zoom/pan state
+                isSharedZoomApplied = true;
+                CalculateDrawingRegion();
+            }
+            else
+            {
+                isSharedZoomApplied = ApplySharedZoomState(Photo);
+            }
 
             if (resetZoom && !isSharedZoomApplied)
             {
                 SetZoomMode(null, isManualZoom, zoomedByResizing);
             }
-            else
+            else if (!sharedZoomAlreadyApplied)
             {
                 CalculateDrawingRegion();
             }
@@ -990,6 +1007,7 @@ public partial class ViewerControl : PhControl
                         }
 
                         var appliedSharedZoom = ApplySharedZoomState(e.Photo);
+                        _sharedZoomJustApplied = appliedSharedZoom;
                         Refresh(appliedSharedZoom ? false : _loadingOptions.ResetZoom);
                     }
                 }
