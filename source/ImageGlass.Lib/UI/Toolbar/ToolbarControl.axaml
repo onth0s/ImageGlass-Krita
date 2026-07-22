@@ -178,6 +178,11 @@
                                     ToggleType="CheckBox" />
                                 <ui:PhMenuItem
                                     Click="MainMenuItem_Click"
+                                    IsChecked="{CompiledBinding IsSharedZoomEnabled}"
+                                    LangKey="_SharedZoom"
+                                    ToggleType="CheckBox" />
+                                <ui:PhMenuItem
+                                    Click="MainMenuItem_Click"
                                     IsChecked="{CompiledBinding IsZoomModeScaleToWidth}"
                                     LangKey="Menu_MnuScaleToWidth"
                                     ToggleType="CheckBox" />

@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -73,6 +73,7 @@ public partial class ToolbarItemModel : PhReactive, IJsonOnDeserialized
     public static bool IsZoomModeScaleToHeight => Core.Config.ZoomMode == Viewer.ZoomMode.ScaleToHeight;
     public static bool IsZoomModeScaleToFit => Core.Config.ZoomMode == Viewer.ZoomMode.ScaleToFit;
     public static bool IsZoomModeScaleToFill => Core.Config.ZoomMode == Viewer.ZoomMode.ScaleToFill;
+    public static bool IsSharedZoomEnabled => Core.Config.EnableSharedZoom;
 
 
     public static bool IsLoadingByName => Core.Config.ImageLoadingOrder == ImageOrderBy.Name;
