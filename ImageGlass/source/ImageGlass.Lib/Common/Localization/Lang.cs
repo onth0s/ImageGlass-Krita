@@ -460,6 +460,7 @@ public class Lang
         new(LangId._Back, "Back"), // v9.0
         new(LangId._Next, "Next"), // v9.0
         new(LangId._SharedZoom, "Shared Zoom"),
+        new(LangId._DebugMessage, "Debug Message"),
         new(LangId._Save, "Save"), // v9.0
         new(LangId._Warning, "Warning"), // v9.0
         new(LangId._Copy, "Copy"), //v9.0

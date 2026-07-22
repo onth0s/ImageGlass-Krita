@@ -411,7 +411,7 @@ public partial class Config : PhReactive
     /// </summary>
     public bool EnableImagePreview
     {
-        get => Get(ConfigId.EnableImagePreview, true);
+        get => Get(ConfigId.EnableImagePreview, false);
         set => Set(ConfigId.EnableImagePreview, value);
     }
 

@@ -1300,6 +1300,20 @@ public partial class AppAPIProvider
         }
     }
 
+
+    /// <summary>
+    /// Displays a debug message dialog.
+    /// </summary>
+    public static async Task IG_DebugMessageAsync()
+    {
+        await ModalWindow.ShowInfoAsync(App.MainWindow, new ModalWindowOptions
+        {
+            Title = "Debug Message",
+            Heading = "Debug Action Triggered",
+            Details = "This is a custom debug message triggered by pressing 'S'.",
+        });
+    }
+
     #endregion // Zoom APIs
 
 

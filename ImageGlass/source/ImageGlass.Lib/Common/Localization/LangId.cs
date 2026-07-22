@@ -58,6 +58,7 @@ public enum LangId
     _Icon,
     _Description,
     _SharedZoom,
+    _DebugMessage,
     _Type,
     _Version,
     _Author,

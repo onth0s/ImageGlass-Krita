@@ -60,7 +60,6 @@ public static class Win32ShareApi
         // create datapackage
         var dp = e.Request.Data;
 
-        // create List to hold all files to share
         var filesToShare = new List<IStorageItem>();
 
 
@@ -79,13 +78,24 @@ public static class Win32ShareApi
                 dp.Properties.Description = string.Join("\r\n", _filePaths);
             }
 
-            for (var i = 0; i < _filePaths.Count; i++)
+            dp.SetDataProvider(StandardDataFormats.StorageItems, async request =>
             {
-                var imageFile = await StorageFile.GetFileFromPathAsync(_filePaths[i]);
-                filesToShare.Add(imageFile);
-            }
-
-            dp.SetStorageItems(filesToShare);
+                var deferral = request.GetDeferral();
+                try
+                {
+                    var items = new List<IStorageItem>();
+                    for (var i = 0; i < _filePaths.Count; i++)
+                    {
+                        var imageFile = await StorageFile.GetFileFromPathAsync(_filePaths[i]);
+                        items.Add(imageFile);
+                    }
+                    request.SetData(items);
+                }
+                finally
+                {
+                    deferral.Complete();
+                }
+            });
         }
         catch (Exception ex)
         {

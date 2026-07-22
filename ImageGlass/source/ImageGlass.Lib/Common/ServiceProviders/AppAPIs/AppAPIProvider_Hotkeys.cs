@@ -63,7 +63,8 @@ public partial class AppAPIProvider
         new(LangId.Menu_MnuExportFrames,         API.IG_ExportImageFrames,   Hotkey.Ctrl, Key.J),
         new(LangId.Menu_MnuPrint,                API.IG_Print,               Hotkey.Ctrl, Key.P),
         new(LangId.Menu_MnuOpenWith,             API.IG_OpenWith,            Key.D),
-        new(LangId.Menu_MnuShare,                API.IG_Share,               Key.S),
+        new(LangId.Menu_MnuShare,                API.IG_Share),
+        new(LangId._DebugMessage,                API.IG_DebugMessage,        Key.S),
         new(LangId.Menu_MnuOpenLocation,         API.IG_OpenLocation,        Key.L),
         new(LangId.Menu_MnuRename,               API.IG_Rename,              Key.F2),
         new(LangId.Menu_MnuMoveToRecycleBin,     API.IG_Delete, "true",      [new(Hotkey.Delete)]),
@@ -248,7 +249,10 @@ public partial class AppAPIProvider
 
 
             // 1.2 get hotkey text
-            var hotkeyTextList = item.OnClick.Hotkeys.Select(hk => hk.KeyString) ?? [];
+            var hotkeyTextList = item.OnClick.Hotkeys
+                .Where(hk => hk?.KeyString is not null)
+                .Select(hk => hk.KeyString);
+
             if (!hotkeyTextList.Any())
             {
                 var langKey = Lang.GetKey(item.OnClick.LangKey);
@@ -263,7 +267,9 @@ public partial class AppAPIProvider
                         menuHotkeys = menuAction?.Hotkeys ?? [];
                     }
 
-                    hotkeyTextList = menuHotkeys.Select(hk => hk.KeyString) ?? [];
+                    hotkeyTextList = menuHotkeys
+                        .Where(hk => hk?.KeyString is not null)
+                        .Select(hk => hk.KeyString);
                 }
             }
             item.HotkeyText = string.Join(", ", hotkeyTextList);
@@ -272,6 +278,7 @@ public partial class AppAPIProvider
             // 1.3 register custom hotkey
             foreach (var hk in item.OnClick.Hotkeys)
             {
+                if (hk?.KeyString is null) continue;
                 // save custom hotkey to the map
                 _ = AppHotkeysMap.TryAdd(hk.KeyString, item.OnClick);
             }
@@ -293,6 +300,7 @@ public partial class AppAPIProvider
         {
             foreach (var hk in item.Value.Hotkeys)
             {
+                if (hk?.KeyString is null) continue;
                 // save to the maps
                 AppHotkeysMap.TryAdd(hk.KeyString, item.Value);
             }

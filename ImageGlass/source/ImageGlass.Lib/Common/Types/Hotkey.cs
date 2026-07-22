@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -133,10 +133,26 @@ public class Hotkey
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
 
-        var kg = KeyGesture.Parse(s);
-        if (kg is null) return null;
+        // Replace legacy v8/v9 key strings like "Right Arrow" -> "Right"
+        var normalized = s
+            .Replace("Right Arrow", "Right", System.StringComparison.OrdinalIgnoreCase)
+            .Replace("Left Arrow", "Left", System.StringComparison.OrdinalIgnoreCase)
+            .Replace("Up Arrow", "Up", System.StringComparison.OrdinalIgnoreCase)
+            .Replace("Down Arrow", "Down", System.StringComparison.OrdinalIgnoreCase)
+            .Replace("Page Up", "PageUp", System.StringComparison.OrdinalIgnoreCase)
+            .Replace("Page Down", "PageDown", System.StringComparison.OrdinalIgnoreCase);
 
-        return new Hotkey(kg);
+        try
+        {
+            var kg = KeyGesture.Parse(normalized);
+            if (kg is null) return null;
+
+            return new Hotkey(kg);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
 

@@ -79,6 +79,7 @@ public partial class AppAPIProvider
         { API.IG_ZoomOut,               PhCommands.Create(IG_ZoomOut) },
         { API.IG_SetZoomMode,           PhCommands.Create(IG_SetZoomMode) },
         { API.IG_ToggleSharedZoom,      PhCommands.Create(IG_ToggleSharedZoom) },
+        { API.IG_DebugMessage,          PhCommands.Create(IG_DebugMessageAsync) },
 
 
         // Panning
