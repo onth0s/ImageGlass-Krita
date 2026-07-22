@@ -694,11 +694,11 @@ public partial class ViewerControl : PhControl
     {
         if (!ShouldLoadFullResolution) e.Photo.CancelLoading();
 
-        // 1. skip the preview if it's not enable or in zoom lock mode
-        if (!EnableImagePreview || ZoomMode == ZoomMode.LockZoom)
+        // 1. skip the preview if it's not enable or in zoom lock mode or shared zoom mode
+        if (!EnableImagePreview || ZoomMode == ZoomMode.LockZoom || Core.Config.EnableSharedZoom)
         {
             PhotoTrace.Mark("viewer:preview-skip", e.Photo.FilePath,
-                $"enablePreview={EnableImagePreview}, zoomMode={ZoomMode}");
+                $"enablePreview={EnableImagePreview}, zoomMode={ZoomMode}, sharedZoom={Core.Config.EnableSharedZoom}");
 
             // raise event
             _isPreviewing.SetFalse();
