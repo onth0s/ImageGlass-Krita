@@ -142,7 +142,7 @@ public partial class ViewerControl
                     return "ERR";
 
                 case "SET_PAN":
-                    // SET_PAN {normX} {normY}
+                    // SET_PAN {normX} {normY}  — normX/Y are center-image fractions [0,1]
                     if (parts.Length >= 3
                         && double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var normX)
                         && double.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out var normY)
@@ -151,15 +151,15 @@ public partial class ViewerControl
                         var zFactor = _zooming.Factor / Dpi;
                         var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
                         var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
-                        var maxPanX = Math.Max(0.0, BitmapSize.Width  - controlW / zFactor);
-                        var maxPanY = Math.Max(0.0, BitmapSize.Height - controlH / zFactor);
-
-                        _logicalSrcPoint = new Avalonia.Point(
-                            Math.Clamp(normX, 0, 1) * maxPanX,
-                            Math.Clamp(normY, 0, 1) * maxPanY);
+                        var halfViewW = controlW / (2.0 * zFactor);
+                        var halfViewH = controlH / (2.0 * zFactor);
 
                         _sharedZoomPanNormX = Math.Clamp(normX, 0, 1);
                         _sharedZoomPanNormY = Math.Clamp(normY, 0, 1);
+
+                        _logicalSrcPoint = new Avalonia.Point(
+                            _sharedZoomPanNormX * BitmapSize.Width  - halfViewW,
+                            _sharedZoomPanNormY * BitmapSize.Height - halfViewH);
 
                         CalculateDrawingRegion();
                         InvalidateVisual();

@@ -77,17 +77,17 @@ public partial class ViewerControl
         _zooming.Factor = _sharedZoomRatio.Value * fitFactor;
         _zooming.IsManual = true;
 
-        // 2. Restore pan: fraction × new max pan range
+        // 2. Restore pan: place the saved image-center fraction at the viewport center.
+        //    srcTopLeft = centerFrac * imageSize - halfViewportInImagePixels
         var zFactor = _zooming.Factor / Dpi;
         var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
         var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
-
-        var maxPanX = Math.Max(0.0, BitmapSize.Width  - controlW / zFactor);
-        var maxPanY = Math.Max(0.0, BitmapSize.Height - controlH / zFactor);
+        var halfViewW = controlW / (2.0 * zFactor);
+        var halfViewH = controlH / (2.0 * zFactor);
 
         _logicalSrcPoint = new Point(
-            _sharedZoomPanNormX * maxPanX,
-            _sharedZoomPanNormY * maxPanY);
+            _sharedZoomPanNormX * BitmapSize.Width  - halfViewW,
+            _sharedZoomPanNormY * BitmapSize.Height - halfViewH);
 
         CalculateDrawingRegion();
         return true;
@@ -112,18 +112,29 @@ public partial class ViewerControl
         var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
         _sharedZoomRatio = fitFactor > 0 ? _zooming.Factor / fitFactor : 1.0;
 
-        // 2. Pan fraction — only overwrite an axis when the image overflows on that axis.
-        //    If the image fits entirely, the saved fraction is preserved as-is so that
-        //    navigating through small images doesn't corrupt the pan position.
+        // 2. Pan as CENTER-OF-VIEWPORT fraction of the image [0, 1] on each axis.
+        //    Using the center (not the top-left) makes this coordinate invariant across
+        //    images of different pixel sizes at the same zoom ratio:
+        //    the same content fraction appears at the same screen position.
+        //
+        //    center = srcTopLeft + half_viewport_in_image_pixels
+        //    frac   = center / imageSize   (clamped 0..1)
         var zFactor = _zooming.Factor / Dpi;
         var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
         var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
+        var halfViewW = controlW / (2.0 * zFactor);
+        var halfViewH = controlH / (2.0 * zFactor);
 
+        var centerX = _logicalSrcPoint.X + halfViewW;
+        var centerY = _logicalSrcPoint.Y + halfViewH;
+
+        // Only overwrite an axis when the image overflows on that axis; otherwise the
+        // saved fraction is preserved so navigating through small images doesn't corrupt it.
         var maxPanX = Math.Max(0.0, BitmapSize.Width  - controlW / zFactor);
         var maxPanY = Math.Max(0.0, BitmapSize.Height - controlH / zFactor);
 
-        if (maxPanX > 0) _sharedZoomPanNormX = Math.Clamp(_logicalSrcPoint.X / maxPanX, 0, 1);
-        if (maxPanY > 0) _sharedZoomPanNormY = Math.Clamp(_logicalSrcPoint.Y / maxPanY, 0, 1);
+        if (maxPanX > 0) _sharedZoomPanNormX = Math.Clamp(centerX / BitmapSize.Width,  0, 1);
+        if (maxPanY > 0) _sharedZoomPanNormY = Math.Clamp(centerY / BitmapSize.Height, 0, 1);
     }
 
 
