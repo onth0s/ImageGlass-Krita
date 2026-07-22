@@ -75,6 +75,8 @@ public partial class ViewerControl
         // 1. Restore zoom: same ratio × ScaleToFit (true fit factor, never capped at 1.0)
         var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
         _zooming.Factor = _sharedZoomRatio.Value * fitFactor;
+        _zooming.OldFactor = _zooming.Factor;
+        _zooming.ZoomedPoint = default;
         _zooming.IsManual = true;
 
         // 2. Restore pan: place the saved image-center fraction at the viewport center.
@@ -914,6 +916,7 @@ public partial class ViewerControl
         // update drawing regions (handles zoom-to-cursor anchoring)
         CalculateDrawingRegion();
         CaptureSharedZoomState();
+        _zooming.ZoomedPoint = default;
 
         if (requestRerender) InvalidateVisual();
 
