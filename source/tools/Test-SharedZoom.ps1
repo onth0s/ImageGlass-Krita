@@ -56,6 +56,22 @@ function Query-DiagPipe {
     return ($json | ConvertFrom-Json)
 }
 
+# Helper: wait until expected photo is fully loaded in viewer
+function Wait-PhotoLoaded {
+    param([string] $ExpectedFileName, [int] $TimeoutMs = 4000)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($sw.ElapsedMilliseconds -lt $TimeoutMs) {
+        $state = Query-DiagPipe
+        if ($state.FilePath -and (Split-Path $state.FilePath -Leaf) -eq $ExpectedFileName) {
+            # Extra small pause for layout stabilization
+            Start-Sleep -Milliseconds 100
+            return (Query-DiagPipe)
+        }
+        Start-Sleep -Milliseconds 150
+    }
+    return (Query-DiagPipe)
+}
+
 # Helper: set zoom ratio (multiple of ScaleToFit)
 function Set-Zoom {
     param([double] $Ratio)
@@ -318,15 +334,16 @@ try {
     Write-Host "`n--- T6: Zoom to cursor point (200, 150) preserved A → B ---"
 
     Navigate -Delta -1; Navigate -Delta -1; Navigate -Delta -1 # back to A
+    $stateA6_init = Wait-PhotoLoaded 'A_large_landscape.png'
     Zoom-ToPoint -Ratio 2.5 -ScreenX 200 -ScreenY 150 | Out-Null
-    Start-Sleep -Milliseconds 300
+    Start-Sleep -Milliseconds 400
 
     $stateA6 = Query-DiagPipe
     $ptA6 = Get-PointPixelColor $stateA6 200 150
     Write-Host "  [DBG] A at (200,150): Frac=($([Math]::Round($ptA6.FracX,3)), $([Math]::Round($ptA6.FracY,3))) R=$($ptA6.R) G=$($ptA6.G)"
 
     Navigate -Delta 1  # B
-    $stateB6 = Query-DiagPipe
+    $stateB6 = Wait-PhotoLoaded 'B_small_landscape.png'
     $ptB6 = Get-PointPixelColor $stateB6 200 150
     Write-Host "  [DBG] B at (200,150): Frac=($([Math]::Round($ptB6.FracX,3)), $([Math]::Round($ptB6.FracY,3))) R=$($ptB6.R) G=$($ptB6.G)"
 

@@ -73,7 +73,10 @@ public partial class ViewerControl
             return false;
 
         // 1. Restore zoom: same ratio × ScaleToFit (true fit factor, never capped at 1.0)
-        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
+        var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : Bounds.Width > 0 ? Bounds.Width - Padding.Left - Padding.Right : 800;
+        var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : Bounds.Height > 0 ? Bounds.Height - Padding.Top - Padding.Bottom : 600;
+
+        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height, controlW, controlH);
         _zooming.Factor = _sharedZoomRatio.Value * fitFactor;
         _zooming.OldFactor = _zooming.Factor;
         _zooming.ZoomedPoint = default;
@@ -82,8 +85,6 @@ public partial class ViewerControl
         // 2. Restore pan: place the saved image-center fraction at the viewport center.
         //    srcTopLeft = centerFrac * imageSize - halfViewportInImagePixels
         var zFactor = _zooming.Factor / Dpi;
-        var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
-        var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
         var halfViewW = controlW / (2.0 * zFactor);
         var halfViewH = controlH / (2.0 * zFactor);
 
@@ -111,7 +112,10 @@ public partial class ViewerControl
         _sharedZoomDir = System.IO.Path.GetDirectoryName(Photo.FilePath);
 
         // 1. Zoom ratio relative to ScaleToFit (true fit factor, never capped at 1.0)
-        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
+        var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : Bounds.Width > 0 ? Bounds.Width - Padding.Left - Padding.Right : 800;
+        var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : Bounds.Height > 0 ? Bounds.Height - Padding.Top - Padding.Bottom : 600;
+
+        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height, controlW, controlH);
         _sharedZoomRatio = fitFactor > 0 ? _zooming.Factor / fitFactor : 1.0;
 
         // 2. Pan as CENTER-OF-VIEWPORT fraction of the image [0, 1] on each axis.
@@ -122,8 +126,6 @@ public partial class ViewerControl
         //    center = srcTopLeft + half_viewport_in_image_pixels
         //    frac   = center / imageSize   (clamped 0..1)
         var zFactor = _zooming.Factor / Dpi;
-        var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : 800;
-        var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : 600;
         var halfViewW = controlW / (2.0 * zFactor);
         var halfViewH = controlH / (2.0 * zFactor);
 
