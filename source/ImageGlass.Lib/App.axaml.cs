@@ -80,13 +80,9 @@ public partial class App : Application
     /// </summary>
     public override void Initialize()
     {
-        // App-level exception handler for non-debugger
-        if (!Debugger.IsAttached)
-        {
-            Dispatcher.UIThread.UnhandledException += UIThread_UnhandledException;
-            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-        }
+        Dispatcher.UIThread.UnhandledException += UIThread_UnhandledException;
+        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
         AvaloniaXamlLoader.Load(this);
     }
@@ -263,11 +259,8 @@ public partial class App : Application
 
     private static async void UIThread_UnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
+        LogCrash(e.Exception, "UIThread_UnhandledException");
         e.Handled = await ModalWindow.ShowUnhandledErrorAsync(e.Exception);
-
-#if DEBUG
-        throw e.Exception;
-#endif
     }
 
 
@@ -275,14 +268,11 @@ public partial class App : Application
     {
         e.SetObserved();
         var ex = e.Exception;
+        LogCrash(ex, "TaskScheduler_UnobservedTaskException");
 
         Dispatcher.UIThread.Post(async () =>
         {
             await ModalWindow.ShowUnhandledErrorAsync(ex);
-
-#if DEBUG
-            throw ex;
-#endif
         });
     }
 
@@ -290,15 +280,23 @@ public partial class App : Application
     private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var ex = (Exception)e.ExceptionObject;
+        LogCrash(ex, "CurrentDomain_UnhandledException");
 
         Dispatcher.UIThread.Post(async () =>
         {
             _ = await ModalWindow.ShowUnhandledErrorAsync(ex);
-
-#if DEBUG
-            throw ex;
-#endif
         });
+    }
+
+    private static void LogCrash(Exception ex, string source)
+    {
+        try
+        {
+            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{source}] {ex.GetType().FullName}: {ex.Message}\n{ex.StackTrace}\nInner: {ex.InnerException}\n\n";
+            System.IO.File.AppendAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ig_crash.log"), msg);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ig_crash.log"), msg);
+        }
+        catch { }
     }
 
     #endregion // Unhandled Exception Handlers

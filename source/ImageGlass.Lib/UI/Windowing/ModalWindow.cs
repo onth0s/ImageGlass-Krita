@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -827,6 +827,14 @@ public partial class ModalWindow : DialogWindow
         // get error details
         var details = BHelper.GetExceptionDetails(ex);
         var isContinue = false;
+
+        try
+        {
+            var logMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] UNHANDLED ERROR:\nHeading: {heading}\nException: {ex.GetType().FullName}\nMessage: {ex.Message}\nDetails: {details}\nStackTrace:\n{ex.StackTrace}\nInnerException: {ex.InnerException}\n\n";
+            System.IO.File.AppendAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ig_crash.log"), logMessage);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ig_crash.log"), logMessage);
+        }
+        catch { }
 
         var descriptionText = string.IsNullOrEmpty(heading)
             ? string.Empty

@@ -130,31 +130,16 @@ public static class KritaCodec
             throw new InvalidDataException($"Failed to extract preview image from Krita file: {meta.FilePath}");
         }
 
-        using var codec = SKCodec.Create(stream);
-        if (codec is null || codec.IsDisposed())
+        var image = SKImage.FromEncodedData(stream);
+        if (image is null || image.Handle == IntPtr.Zero)
         {
-            throw new InvalidDataException($"Failed to decode image stream from Krita file: {meta.FilePath}");
+            throw new InvalidDataException($"Failed to decode preview PNG from Krita file: {meta.FilePath}");
         }
 
-        var result = new SkiaDecoderOutput
+        return new SkiaDecoderOutput
         {
-            Size = new Size(codec.Info.Width, codec.Info.Height)
+            Size = new Size(image.Width, image.Height),
+            SingleFrame = image
         };
-
-        using var bmpFrame = new SKBitmap(codec.Info);
-        var codecOption = new SKCodecOptions(0);
-
-        if (codec.GetPixels(codec.Info, bmpFrame.GetPixels(), codecOption) == SKCodecResult.Success)
-        {
-            result.SingleFrame = SKImage.FromBitmap(bmpFrame);
-        }
-        else
-        {
-            // Fallback: decode directly via SKImage
-            stream.Position = 0;
-            result.SingleFrame = SKImage.FromEncodedData(stream);
-        }
-
-        return result;
     }
 }
