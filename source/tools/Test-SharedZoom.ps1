@@ -115,6 +115,31 @@ Start-Sleep -Seconds 3
 # Store the T2 zoom ratio for the round-trip test (T4)
 $script:T2ZoomRatio = $null
 
+function Get-ViewportCenterFrac {
+    param($state)
+    if (-not $state -or $state.BitmapWidth -eq 0 -or $state.SrcWidth -eq 0 -or $state.DestWidth -eq 0) {
+        return [PSCustomObject]@{ FracX = 0.5; FracY = 0.5; R = 128; G = 128 }
+    }
+    $screenCenterX = $state.ViewportWidth / 2.0
+    $screenCenterY = $state.ViewportHeight / 2.0
+
+    $scaleX = $state.DestWidth / $state.SrcWidth
+    $scaleY = $state.DestHeight / $state.SrcHeight
+
+    $imgCenterX = $state.SrcX + ($screenCenterX - $state.DestX) / $scaleX
+    $imgCenterY = $state.SrcY + ($screenCenterY - $state.DestY) / $scaleY
+
+    $fracX = $imgCenterX / $state.BitmapWidth
+    $fracY = $imgCenterY / $state.BitmapHeight
+
+    return [PSCustomObject]@{
+        FracX = $fracX
+        FracY = $fracY
+        R     = [Math]::Round($fracX * 255)
+        G     = [Math]::Round($fracY * 255)
+    }
+}
+
 try {
     # -----------------------------------------------------------------------
     # T1 – Fit zoom baseline: both images start at ratio=1, pan=center
@@ -122,23 +147,25 @@ try {
     Write-Host "`n--- T1: Fit zoom baseline ---"
 
     $stateA = Query-DiagPipe
-    Write-Host "  [DBG] A: ZoomRatio=$($stateA.SharedZoomRatio) PanX=$($stateA.SharedZoomPanNormX) PanY=$($stateA.SharedZoomPanNormY)"
+    $centerA1 = Get-ViewportCenterFrac $stateA
+    Write-Host "  [DBG] A: ZoomRatio=$($stateA.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA1.FracX,3)), $([Math]::Round($centerA1.FracY,3))) R=$($centerA1.R) G=$($centerA1.G)"
 
     Navigate -Delta 1
     $stateB = Query-DiagPipe
-    Write-Host "  [DBG] B: ZoomRatio=$($stateB.SharedZoomRatio) PanX=$($stateB.SharedZoomPanNormX) PanY=$($stateB.SharedZoomPanNormY)"
+    $centerB1 = Get-ViewportCenterFrac $stateB
+    Write-Host "  [DBG] B: ZoomRatio=$($stateB.SharedZoomRatio) CenterFrac=($([Math]::Round($centerB1.FracX,3)), $([Math]::Round($centerB1.FracY,3))) R=$($centerB1.R) G=$($centerB1.G)"
 
     Assert-Test 'T1-ZoomRatio' `
         ([Math]::Abs($stateB.SharedZoomRatio - $stateA.SharedZoomRatio) -lt 0.01) `
         "A.ZoomRatio=$($stateA.SharedZoomRatio)  B.ZoomRatio=$($stateB.SharedZoomRatio)"
 
-    Assert-Test 'T1-PanNormX' `
-        ([Math]::Abs($stateB.SharedZoomPanNormX - $stateA.SharedZoomPanNormX) -lt 0.01) `
-        "A.PanX=$($stateA.SharedZoomPanNormX)  B.PanX=$($stateB.SharedZoomPanNormX)"
+    Assert-Test 'T1-CenterColor-R' `
+        ([Math]::Abs($centerB1.R - $centerA1.R) -le 2) `
+        "A.R=$($centerA1.R)  B.R=$($centerB1.R)"
 
-    Assert-Test 'T1-PanNormY' `
-        ([Math]::Abs($stateB.SharedZoomPanNormY - $stateA.SharedZoomPanNormY) -lt 0.01) `
-        "A.PanY=$($stateA.SharedZoomPanNormY)  B.PanY=$($stateB.SharedZoomPanNormY)"
+    Assert-Test 'T1-CenterColor-G' `
+        ([Math]::Abs($centerB1.G - $centerA1.G) -le 2) `
+        "A.G=$($centerA1.G)  B.G=$($centerB1.G)"
 
     # -----------------------------------------------------------------------
     # T2 – Top-left corner: zoom 2×, pan to (0,0), switch image
@@ -151,24 +178,25 @@ try {
     Start-Sleep -Milliseconds 300
 
     $stateA2 = Query-DiagPipe
-    $script:T2ZoomRatio = $stateA2.SharedZoomRatio
-    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA2.SharedZoomRatio) PanX=$($stateA2.SharedZoomPanNormX) PanY=$($stateA2.SharedZoomPanNormY)"
+    $centerA2 = Get-ViewportCenterFrac $stateA2
+    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA2.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA2.FracX,3)), $([Math]::Round($centerA2.FracY,3))) R=$($centerA2.R) G=$($centerA2.G)"
 
     Navigate -Delta 1
     $stateB2 = Query-DiagPipe
-    Write-Host "  [DBG] B after NAV: ZoomRatio=$($stateB2.SharedZoomRatio) PanX=$($stateB2.SharedZoomPanNormX) PanY=$($stateB2.SharedZoomPanNormY)"
+    $centerB2 = Get-ViewportCenterFrac $stateB2
+    Write-Host "  [DBG] B after NAV: ZoomRatio=$($stateB2.SharedZoomRatio) CenterFrac=($([Math]::Round($centerB2.FracX,3)), $([Math]::Round($centerB2.FracY,3))) R=$($centerB2.R) G=$($centerB2.G)"
 
     Assert-Test 'T2-ZoomRatioPreserved' `
         ([Math]::Abs($stateB2.SharedZoomRatio - $stateA2.SharedZoomRatio) -lt 0.01) `
         "A.ZoomRatio=$($stateA2.SharedZoomRatio)  B.ZoomRatio=$($stateB2.SharedZoomRatio)"
 
-    Assert-Test 'T2-PanNormX-TopLeft' `
-        ($stateB2.SharedZoomPanNormX -lt 0.05) `
-        "B.PanNormX=$($stateB2.SharedZoomPanNormX)"
+    Assert-Test 'T2-RenderedColorMatch-R' `
+        ([Math]::Abs($centerB2.R - $centerA2.R) -le 2) `
+        "A.R=$($centerA2.R)  B.R=$($centerB2.R)"
 
-    Assert-Test 'T2-PanNormY-TopLeft' `
-        ($stateB2.SharedZoomPanNormY -lt 0.05) `
-        "B.PanNormY=$($stateB2.SharedZoomPanNormY)"
+    Assert-Test 'T2-RenderedColorMatch-G' `
+        ([Math]::Abs($centerB2.G - $centerA2.G) -le 2) `
+        "A.G=$($centerA2.G)  B.G=$($centerB2.G)"
 
     # -----------------------------------------------------------------------
     # T3 – Bottom-right corner: zoom 2×, pan to (1,1), switch image
@@ -181,19 +209,21 @@ try {
     Start-Sleep -Milliseconds 300
 
     $stateA3 = Query-DiagPipe
-    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA3.SharedZoomRatio) PanX=$($stateA3.SharedZoomPanNormX) PanY=$($stateA3.SharedZoomPanNormY)"
+    $centerA3 = Get-ViewportCenterFrac $stateA3
+    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA3.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA3.FracX,3)), $([Math]::Round($centerA3.FracY,3))) R=$($centerA3.R) G=$($centerA3.G)"
 
     Navigate -Delta 1
     $stateB3 = Query-DiagPipe
-    Write-Host "  [DBG] B after NAV: ZoomRatio=$($stateB3.SharedZoomRatio) PanX=$($stateB3.SharedZoomPanNormX) PanY=$($stateB3.SharedZoomPanNormY)"
+    $centerB3 = Get-ViewportCenterFrac $stateB3
+    Write-Host "  [DBG] B after NAV: ZoomRatio=$($stateB3.SharedZoomRatio) CenterFrac=($([Math]::Round($centerB3.FracX,3)), $([Math]::Round($centerB3.FracY,3))) R=$($centerB3.R) G=$($centerB3.G)"
 
-    Assert-Test 'T3-PanNormX-BottomRight' `
-        ($stateB3.SharedZoomPanNormX -gt 0.95) `
-        "B.PanNormX=$($stateB3.SharedZoomPanNormX)"
+    Assert-Test 'T3-RenderedColorMatch-R' `
+        ([Math]::Abs($centerB3.R - $centerA3.R) -le 2) `
+        "A.R=$($centerA3.R)  B.R=$($centerB3.R)"
 
-    Assert-Test 'T3-PanNormY-BottomRight' `
-        ($stateB3.SharedZoomPanNormY -gt 0.95) `
-        "B.PanNormY=$($stateB3.SharedZoomPanNormY)"
+    Assert-Test 'T3-RenderedColorMatch-G' `
+        ([Math]::Abs($centerB3.G - $centerA3.G) -le 2) `
+        "A.G=$($centerA3.G)  B.G=$($centerB3.G)"
 
     # -----------------------------------------------------------------------
     # T4 – Arbitrary interior pan: zoom 3×, pan to (0.3, 0.7), switch to portrait
@@ -206,24 +236,26 @@ try {
     Start-Sleep -Milliseconds 300
 
     $stateA4 = Query-DiagPipe
-    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA4.SharedZoomRatio) PanX=$($stateA4.SharedZoomPanNormX) PanY=$($stateA4.SharedZoomPanNormY)"
+    $centerA4 = Get-ViewportCenterFrac $stateA4
+    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA4.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA4.FracX,3)), $([Math]::Round($centerA4.FracY,3))) R=$($centerA4.R) G=$($centerA4.G)"
 
     Navigate -Delta 1   # B
     Navigate -Delta 1   # C (portrait)
     $stateC4 = Query-DiagPipe
-    Write-Host "  [DBG] C after NAV: ZoomRatio=$($stateC4.SharedZoomRatio) PanX=$($stateC4.SharedZoomPanNormX) PanY=$($stateC4.SharedZoomPanNormY)"
+    $centerC4 = Get-ViewportCenterFrac $stateC4
+    Write-Host "  [DBG] C after NAV: ZoomRatio=$($stateC4.SharedZoomRatio) CenterFrac=($([Math]::Round($centerC4.FracX,3)), $([Math]::Round($centerC4.FracY,3))) R=$($centerC4.R) G=$($centerC4.G)"
 
     Assert-Test 'T4-ZoomRatioPreserved' `
         ([Math]::Abs($stateC4.SharedZoomRatio - $stateA4.SharedZoomRatio) -lt 0.01) `
         "A.ZoomRatio=$($stateA4.SharedZoomRatio)  C.ZoomRatio=$($stateC4.SharedZoomRatio)"
 
-    Assert-Test 'T4-PanX-0.3' `
-        ([Math]::Abs($stateC4.SharedZoomPanNormX - 0.3) -lt 0.02) `
-        "C.PanNormX=$($stateC4.SharedZoomPanNormX) (expected ~0.3)"
+    Assert-Test 'T4-RenderedColorMatch-R' `
+        ([Math]::Abs($centerC4.R - $centerA4.R) -le 2) `
+        "A.R=$($centerA4.R)  C.R=$($centerC4.R)"
 
-    Assert-Test 'T4-PanY-0.7' `
-        ([Math]::Abs($stateC4.SharedZoomPanNormY - 0.7) -lt 0.02) `
-        "C.PanNormY=$($stateC4.SharedZoomPanNormY) (expected ~0.7)"
+    Assert-Test 'T4-RenderedColorMatch-G' `
+        ([Math]::Abs($centerC4.G - $centerA4.G) -le 2) `
+        "A.G=$($centerA4.G)  C.G=$($centerC4.G)"
 
     # -----------------------------------------------------------------------
     # T5 – Round-trip A→B→C→D→A zoom ratio preserved

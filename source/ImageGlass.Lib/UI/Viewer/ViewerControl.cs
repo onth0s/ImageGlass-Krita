@@ -959,13 +959,24 @@ public partial class ViewerControl : PhControl
                     }
 
 
-                    // 5.3 if user zoomed and panned the preview
-                    if (_isPreviewing
-                        && _zooming.IsManual
-                        && ZoomMode != ZoomMode.LockZoom)
-                    {
-                        _isPreviewing.SetFalse();
+                    _isPreviewing.SetFalse();
 
+                    // Restore saved pan position for LockZoom
+                    if (ZoomMode == ZoomMode.LockZoom && _lockZoomSavedSrcPoint is not null)
+                    {
+                        _logicalSrcPoint = _lockZoomSavedSrcPoint.Value;
+                        _lockZoomSavedSrcPoint = null;
+                    }
+
+                    var appliedSharedZoom = ApplySharedZoomState(e.Photo);
+                    _sharedZoomJustApplied = appliedSharedZoom;
+
+                    if (appliedSharedZoom)
+                    {
+                        Refresh(false);
+                    }
+                    else if (_zooming.IsManual && ZoomMode != ZoomMode.LockZoom && prevSize.Width > 0 && BitmapSize.Width > 0)
+                    {
                         var diffRatio = new Size(
                             prevSize.Width / BitmapSize.Width,
                             prevSize.Height / BitmapSize.Height);
@@ -997,18 +1008,7 @@ public partial class ViewerControl : PhControl
                     }
                     else
                     {
-                        _isPreviewing.SetFalse();
-
-                        // restore saved pan position for LockZoom
-                        if (ZoomMode == ZoomMode.LockZoom && _lockZoomSavedSrcPoint is not null)
-                        {
-                            _logicalSrcPoint = _lockZoomSavedSrcPoint.Value;
-                            _lockZoomSavedSrcPoint = null;
-                        }
-
-                        var appliedSharedZoom = ApplySharedZoomState(e.Photo);
-                        _sharedZoomJustApplied = appliedSharedZoom;
-                        Refresh(appliedSharedZoom ? false : _loadingOptions.ResetZoom);
+                        Refresh(_loadingOptions.ResetZoom);
                     }
                 }
             }
