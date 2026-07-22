@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -34,5 +34,10 @@ public interface IAppBuildInfo
     /// Gets the update channel, either <c>stable</c> or <c>beta</c>.
     /// </summary>
     string UpdateChannel { get; }
+
+    /// <summary>
+    /// Gets the build timestamp.
+    /// </summary>
+    string BuildTime { get; }
 }
 

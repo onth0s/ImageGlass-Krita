@@ -99,7 +99,7 @@ public partial class ViewerControl
     /// </summary>
     internal void CaptureSharedZoomState()
     {
-        if (!Core.Config.EnableSharedZoom || Photo is null || string.IsNullOrEmpty(Photo.FilePath))
+        if (!Core.Config.EnableSharedZoom || _isPreviewing || Photo is null || string.IsNullOrEmpty(Photo.FilePath) || Photo.State != PhotoState.Loaded)
             return;
 
         var currentDir = System.IO.Path.GetDirectoryName(Photo.FilePath);
