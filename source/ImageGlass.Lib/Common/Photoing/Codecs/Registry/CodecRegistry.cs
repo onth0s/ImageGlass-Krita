@@ -60,6 +60,7 @@ public sealed class CodecRegistry : PhDisposable
     /// </summary>
     public CodecRegistry()
     {
+        Register(new KritaCodecAdapter());
         Register(new SvgCodecAdapter());
         Register(new SkiaCodecAdapter());
         Register(new MagickCodecAdapter());
@@ -179,7 +180,7 @@ public sealed class CodecRegistry : PhDisposable
             var list = new List<CodecInfo>(_decodeCodecs.Count);
             foreach (var c in _decodeCodecs)
             {
-                var isBuiltIn = c is SvgCodecAdapter or SkiaCodecAdapter or MagickCodecAdapter;
+                var isBuiltIn = c is KritaCodecAdapter or SvgCodecAdapter or SkiaCodecAdapter or MagickCodecAdapter;
                 var pluginId = (c as NativeCodecProxy)?.Plugin.PluginId;
                 list.Add(new CodecInfo(c.CodecId, c.CodecName, c.DecodePriority,
                     c.SupportedExtensions, !isBuiltIn, pluginId));
