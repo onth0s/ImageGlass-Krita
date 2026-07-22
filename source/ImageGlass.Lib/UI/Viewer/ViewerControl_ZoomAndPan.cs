@@ -72,9 +72,9 @@ public partial class ViewerControl
         if (_sharedZoomRatio is null || BitmapSize.IsEmpty || BitmapSize.Width <= 0 || BitmapSize.Height <= 0)
             return false;
 
-        // 1. Restore zoom: same ratio × new AutoFit
-        var autoFit = CalculateZoomFactor(ZoomMode.AutoZoom, BitmapSize.Width, BitmapSize.Height);
-        _zooming.Factor = _sharedZoomRatio.Value * autoFit;
+        // 1. Restore zoom: same ratio × ScaleToFit (true fit factor, never capped at 1.0)
+        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
+        _zooming.Factor = _sharedZoomRatio.Value * fitFactor;
         _zooming.IsManual = true;
 
         // 2. Restore pan: fraction × new max pan range
@@ -108,9 +108,9 @@ public partial class ViewerControl
 
         _sharedZoomDir = System.IO.Path.GetDirectoryName(Photo.FilePath);
 
-        // 1. Zoom ratio relative to AutoFit
-        var autoFit = CalculateZoomFactor(ZoomMode.AutoZoom, BitmapSize.Width, BitmapSize.Height);
-        _sharedZoomRatio = autoFit > 0 ? _zooming.Factor / autoFit : 1.0;
+        // 1. Zoom ratio relative to ScaleToFit (true fit factor, never capped at 1.0)
+        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
+        _sharedZoomRatio = fitFactor > 0 ? _zooming.Factor / fitFactor : 1.0;
 
         // 2. Pan fraction — only overwrite an axis when the image overflows on that axis.
         //    If the image fits entirely, the saved fraction is preserved as-is so that
@@ -697,7 +697,6 @@ public partial class ViewerControl
         DestRect = new(destX, destY, destWidth, destHeight);
 
         _zooming.OldFactor = _zooming.Factor;
-        CaptureSharedZoomState();
     }
 
 
@@ -720,6 +719,7 @@ public partial class ViewerControl
 
         // update drawing regions
         CalculateDrawingRegion();
+        CaptureSharedZoomState();
         InvalidateVisual();
 
         ZoomChanged?.Invoke(this, new ViewerZoomEventArgs()
@@ -755,6 +755,7 @@ public partial class ViewerControl
 
         // update drawing regions
         CalculateDrawingRegion();
+        CaptureSharedZoomState();
 
 
         ZoomChanged?.Invoke(this, new ViewerZoomEventArgs()
@@ -901,6 +902,7 @@ public partial class ViewerControl
 
         // update drawing regions (handles zoom-to-cursor anchoring)
         CalculateDrawingRegion();
+        CaptureSharedZoomState();
 
         if (requestRerender) InvalidateVisual();
 
@@ -1003,6 +1005,7 @@ public partial class ViewerControl
 
         // update drawing regions
         CalculateDrawingRegion();
+        CaptureSharedZoomState();
 
 
         if (requestRerender) InvalidateVisual();
@@ -1069,6 +1072,7 @@ public partial class ViewerControl
 
         // update drawing regions
         CalculateDrawingRegion();
+        CaptureSharedZoomState();
 
 
         if (requestRerender) InvalidateVisual();
