@@ -1,0 +1,61 @@
+<windows:SettingsPageView
+    x:Class="ImageGlass.Common.Windows.GeneralSettingsView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="using:ImageGlass.UI"
+    xmlns:windows="using:ImageGlass.Common.Windows"
+    mc:Ignorable="d"
+    d:DesignWidth="600"
+    HorizontalAlignment="Stretch">
+
+    <StackPanel Orientation="Vertical">
+
+        <!--  Locations (no heading): button links, tooltip = full path, click = open  -->
+        <StackPanel Margin="{DynamicResource SettingsGroupIndent}" HorizontalAlignment="Left">
+            <ui:PhButton x:Name="PART_StartupDir" Variant="Link" />
+            <ui:PhButton x:Name="PART_ConfigDir" Variant="Link" />
+            <ui:PhButton x:Name="PART_UserConfig" Variant="Link" />
+        </StackPanel>
+
+
+        <!--  Startup  -->
+        <ui:PhTextBlock Classes="group" LangKey="Settings_Startup" />
+        <StackPanel Margin="{DynamicResource SettingsGroupIndent}">
+            <CheckBox x:Name="PART_WelcomeImage">
+                <ui:PhTextBlock LangKey="Settings_EnableWelcomeImage" TextWrapping="Wrap" />
+            </CheckBox>
+            <CheckBox x:Name="PART_LastSeenImage">
+                <ui:PhTextBlock LangKey="Settings_EnableLastSeenImage" TextWrapping="Wrap" />
+            </CheckBox>
+            <CheckBox x:Name="PART_MultiInstances">
+                <ui:PhTextBlock LangKey="Settings_EnableMultiInstances" TextWrapping="Wrap" />
+            </CheckBox>
+        </StackPanel>
+
+
+        <!--  App update  -->
+        <ui:PhTextBlock Classes="group" LangKey="Settings_AppUpdate" />
+        <StackPanel Margin="{DynamicResource SettingsGroupIndent}">
+            <CheckBox x:Name="PART_AutoUpdate">
+                <ui:PhTextBlock LangKey="Settings_AutoUpdate" TextWrapping="Wrap" />
+            </CheckBox>
+        </StackPanel>
+
+
+        <!--  Others  -->
+        <ui:PhTextBlock Classes="group" LangKey="Settings_Others" />
+        <StackPanel Margin="{DynamicResource SettingsGroupIndent}">
+            <StackPanel Spacing="{DynamicResource SettingsLabelInputGap}">
+                <ui:PhTextBlock LangKey="Settings_InAppMessageDuration" TextWrapping="Wrap" />
+                <ui:PhTextBox
+                    x:Name="PART_MsgDuration"
+                    Width="200"
+                    HorizontalAlignment="Left"
+                    AcceptValue="UnsignedIntValueOnly" />
+            </StackPanel>
+        </StackPanel>
+
+    </StackPanel>
+</windows:SettingsPageView>

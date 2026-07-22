@@ -1,0 +1,119 @@
+﻿/*
+ImageGlass - A Fast, Seamless Photo Viewer
+Copyright (C) 2010 - 2026 DUONG DIEU PHAP
+Project homepage: https://imageglass.org
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+using ImageGlass.Common.Types;
+using System;
+using System.Threading.Tasks;
+
+namespace ImageGlass.Common.ServiceProviders;
+
+public interface IShellProvider : IDisposable
+{
+    /// <summary>
+    /// Gets, sets the Shell object of foreground window.
+    /// </summary>
+    object? ForegroundShell { get; set; }
+
+
+    /// <summary>
+    /// Check if we can use the foreground shell folder for loading images.
+    /// </summary>
+    bool CanUseForegroundShell();
+
+
+    /// <summary>
+    /// Gets the foreground shell object.
+    /// </summary>
+    object? GetForegroundWindowView();
+
+
+    /// <summary>
+    /// Gets the target path from shortcute file path
+    /// </summary>
+    string? GetTargetPathFromShortcut(string? lnkFilePath);
+
+
+    /// <summary>
+    /// Opens file explorer and selects the file.
+    /// </summary>
+    void OpenFilePath(string? filePath);
+
+
+    /// <summary>
+    /// Opens file explorer and selects the folder.
+    /// </summary>
+    void OpenFolderPath(string? dirPath);
+
+
+    /// <summary>
+    /// Deletes a file with option to move to recycle bin.
+    /// </summary>
+    void DeleteFile(string filePath, bool moveToRecycleBin = true);
+
+
+    /// <summary>
+    /// Shows the "Open with" dialog for the specified file.
+    /// </summary>
+    void ShowOpenWith(string filePath);
+
+
+    /// <summary>
+    /// Shows the file's Properties dialog.
+    /// </summary>
+    void ShowFileProperties(string filePath, nint windowHandle);
+
+
+    /// <summary>
+    /// Sets the desktop wallpaper.
+    /// </summary>
+    void SetWallpaper(string filePath);
+
+
+    /// <summary>
+    /// Sets the lock screen image.
+    /// </summary>
+    Task SetLockScreenAsync(string filePath);
+
+
+    /// <summary>
+    /// Opens the specified file in the system's default editing application.
+    /// </summary>
+    Task OpenDefaultEditingAppAsync(string filePath, Action? callbackFn = null);
+
+
+    /// <summary>
+    /// Sets or removes this app as the default photo viewer for the specified file extensions.
+    /// Returns the registry scope (per-user vs per-machine) that was used.
+    /// </summary>
+    Task<DefaultAppScope> SetDefaultPhotoViewerAsync(string[] extensions, bool enable);
+
+
+    /// <summary>
+    /// Gets the registry scope (per-user vs per-machine) that would be used to register
+    /// the app as the default photo viewer, based on where the app is installed.
+    /// </summary>
+    DefaultAppScope GetDefaultViewerScope() => DefaultAppScope.CurrentUser;
+
+
+    /// <summary>
+    /// Returns <c>true</c> if the current scroll event originates from a trackpad
+    /// (precise/continuous scrolling). Must be called during a scroll event handler.
+    /// Returns <c>false</c> for mouse wheel (discrete) events.
+    /// </summary>
+    bool HasPreciseScrollingDeltas() => false;
+}

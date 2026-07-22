@@ -1,0 +1,565 @@
+/*
+ImageGlass - A Fast, Seamless Photo Viewer
+Copyright (C) 2010 - 2026 DUONG DIEU PHAP
+Project homepage: https://imageglass.org
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+using Avalonia;
+using ImageGlass.Common.Photoing;
+using ImageGlass.Common.Types;
+using ImageGlass.SDK.Plugins;
+using ImageMagick;
+using SkiaSharp;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace ImageGlass.Plugins;
+
+
+/// <summary>
+/// Bridges a single native codec (one entry of an <see cref="IGPluginApi"/>) into the
+/// host's <see cref="ICodec"/> contract so the rest of the codec system can treat it
+/// identically to built-in codecs.
+/// </summary>
+internal sealed unsafe class NativeCodecProxy : PhDisposable, ICodec
+{
+    private readonly NativePlugin _plugin;
+    private readonly IGCodecApi* _codecApi;
+    private readonly PluginFailureManager _failureManager;
+    private readonly HashSet<string> _supportedExtensionsSet;
+
+    /// <summary>
+    /// Gets the plugin handle that owns this codec entry.
+    /// </summary>
+    internal NativePlugin Plugin => _plugin;
+
+    /// <summary>
+    /// Gets the native codec API table this proxy bridges into the host.
+    /// </summary>
+    internal IGCodecApi* CodecApi => _codecApi;
+
+    /// <summary>
+    /// Gets the failure manager used to record soft failures and quarantine the plugin.
+    /// </summary>
+    internal PluginFailureManager FailureManager => _failureManager;
+
+
+    /// <summary>
+    /// Gets the stable codec identifier reported by the plugin.
+    /// </summary>
+    public string CodecId { get; }
+
+    /// <summary>
+    /// Gets the human-readable codec name used in diagnostics and selection output.
+    /// </summary>
+    public string CodecName { get; }
+
+    /// <summary>
+    /// Gets the priority used during metadata codec selection.
+    /// </summary>
+    public int MetadataPriority { get; }
+
+    /// <summary>
+    /// Gets the priority used during full decode selection.
+    /// </summary>
+    public int DecodePriority { get; }
+
+    /// <summary>
+    /// Gets the normalized list of extensions this codec proxy handles.
+    /// </summary>
+    public IReadOnlyList<string> SupportedExtensions { get; }
+
+    /// <summary>
+    /// Gets whether the plugin codec supports metadata probing.
+    /// </summary>
+    public bool SupportsMetadata { get; }
+
+    /// <summary>
+    /// Gets whether the plugin codec supports static-raster decoding.
+    /// </summary>
+    public bool SupportsStaticRaster { get; }
+
+    /// <summary>
+    /// Gets whether the plugin codec can report embedded color profiles.
+    /// </summary>
+    public bool SupportsColorProfiles { get; }
+
+    /// <summary>
+    /// Gets whether the plugin codec implements the animation entry points.
+    /// </summary>
+    public bool SupportsAnimation { get; }
+
+
+    /// <summary>
+    /// Creates a managed proxy around one native codec entry.
+    /// </summary>
+    public NativeCodecProxy(
+        NativePlugin plugin,
+        IGCodecApi* codecApi,
+        CodecPluginCapability capability,
+        PluginFailureManager quarantine)
+    {
+        _plugin = plugin;
+        _codecApi = codecApi;
+        _failureManager = quarantine;
+
+        CodecId = capability.CodecId;
+        CodecName = string.IsNullOrEmpty(capability.CodecName)
+            ? $"{plugin.PluginId}/{capability.CodecId}" : capability.CodecName;
+
+        // Clamp priority so a plugin can't outrank a built-in for a built-in format (unless trusted to).
+        if (PluginCodecPolicy.ClaimsCoreFormat(capability.SupportedExtensions)
+            && !PluginTrustPolicy.AllowsBuiltinOverride(plugin.PluginId))
+        {
+            MetadataPriority = PluginCodecPolicy.ClampToBuiltinCeiling(capability.MetadataPriority);
+            DecodePriority = PluginCodecPolicy.ClampToBuiltinCeiling(capability.DecodePriority);
+        }
+        else
+        {
+            MetadataPriority = capability.MetadataPriority;
+            DecodePriority = capability.DecodePriority;
+        }
+
+        SupportsMetadata = capability.SupportsMetadata;
+        SupportsStaticRaster = capability.SupportsStaticRaster;
+        SupportsColorProfiles = capability.SupportsColorProfiles;
+        SupportsAnimation = capability.SupportsAnimation;
+
+        var exts = new List<string>(capability.SupportedExtensions.Length);
+        _supportedExtensionsSet = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var ext in capability.SupportedExtensions)
+        {
+            if (string.IsNullOrEmpty(ext)) continue;
+            var normalized = ext.StartsWith('.') ? ext : "." + ext;
+            exts.Add(normalized);
+            _supportedExtensionsSet.Add(normalized);
+        }
+        SupportedExtensions = exts;
+    }
+
+
+    /// <summary>
+    /// Checks whether this codec should participate in metadata loading for the given file.
+    /// </summary>
+    public bool CanLoadMetadata(string filePath)
+    {
+        if (!SupportsMetadata) return false;
+        if (_failureManager.IsQuarantined(_plugin.PluginId)) return false;
+        if (string.IsNullOrEmpty(filePath)) return false;
+        var ext = Path.GetExtension(filePath);
+        return _supportedExtensionsSet.Contains(ext);
+    }
+
+
+    /// <summary>
+    /// Checks whether this codec can decode the given photo metadata.
+    /// </summary>
+    public bool CanDecode(PhotoMetadata metadata, CodecSelectionContext context)
+    {
+        if (!SupportsStaticRaster) return false;
+        if (_failureManager.IsQuarantined(_plugin.PluginId)) return false;
+        if (metadata is null || string.IsNullOrEmpty(metadata.FilePath)) return false;
+        return _supportedExtensionsSet.Contains(metadata.FileExtension);
+    }
+
+
+    /// <summary>
+    /// Loads plugin-provided metadata on a background thread.
+    /// </summary>
+    public Task<PhotoMetadata> LoadMetadataAsync(string filePath,
+        PhotoReadOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Factory.StartNew(() => LoadMetadataCore(filePath, cancellationToken),
+            cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+
+    /// <summary>
+    /// Decodes one raster frame through the native plugin on a background thread.
+    /// </summary>
+    public Task<CodecDecodeResult> DecodeAsync(PhotoMetadata metadata,
+        PhotoReadOptions options,
+        CodecSelectionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var frameIndex = Math.Max(0, options?.FrameIndex ?? 0);
+
+        // Animation branch: the plugin advertises animation AND metadata says
+        // the file plays as a timeline. Build the animator on a background
+        // thread; per-frame decode is lazy inside the animator.
+        if (SupportsAnimation && metadata.CanAnimate)
+        {
+            return Task.Factory.StartNew(() => DecodeAnimationCore(metadata, cancellationToken),
+                cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        return Task.Factory.StartNew(() => DecodeCore(metadata, frameIndex, cancellationToken),
+            cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+
+    /// <summary>
+    /// Builds a <see cref="NativePluginAnimator"/> for the current photo and wraps
+    /// it in a <see cref="CodecDecodeResult"/>. Pixels are decoded lazily by the
+    /// animator on every frame change.
+    /// </summary>
+    private CodecDecodeResult DecodeAnimationCore(PhotoMetadata metadata, CancellationToken token)
+    {
+        // PHASE 1: cross the ABI once to pull animation traits and per-frame timing.
+        var animator = NativePluginAnimator.Create(this, metadata, token);
+
+        // PHASE 2: hand the animator back to the host. Photo.LoadAsync moves it
+        // into Photo.Bitmap, ViewerControl wires FrameChanged + StartAnimator.
+        return new CodecDecodeResult
+        {
+            CodecId = $"plugin:{_plugin.PluginId}:{CodecId}",
+            ContentKind = CodecContentKind.Animation,
+            Size = new Size(metadata.Width, metadata.Height),
+            Animator = animator,
+            IsHdr = metadata.IsHdr,
+            HasEmbeddedColorProfile = SupportsColorProfiles && metadata.SkiaColorSpace is not null,
+        };
+    }
+
+
+    /// <summary>
+    /// Invokes the plugin metadata entry point and maps the result into <see cref="PhotoMetadata"/>.
+    /// </summary>
+    private PhotoMetadata LoadMetadataCore(string filePath, CancellationToken token)
+    {
+        var meta = new PhotoMetadata(filePath);
+        if (_codecApi->LoadMetadata == null) return meta;
+
+        // Register a host-side cancellation handle before crossing the ABI.
+        var cancelHandle = PluginHostApiTable.RegisterCancellation(token);
+        try
+        {
+            IGImageInfo info = default;
+            IGStatus status;
+            try
+            {
+                // Call the native metadata entry point with a fixed UTF-16 file path.
+                fixed (char* pPath = filePath)
+                {
+                    var pathRef = new IGStringRef { Data = pPath, Length = filePath.Length };
+                    status = _codecApi->LoadMetadata(pathRef, &info, (void*)cancelHandle);
+                }
+            }
+            catch (Exception ex)
+            {
+                _failureManager.RecordSoftFailure(_plugin.PluginId,
+                    $"managed exception during LoadMetadata: {ex.Message}");
+                return meta;
+            }
+
+            if (status == IGStatus.Canceled)
+            {
+                token.ThrowIfCancellationRequested();
+            }
+            if (status == IGStatus.OK)
+            {
+                // Copy the native metadata fields into the managed photo model.
+                if (info.Width > 0) meta.Width = (uint)info.Width;
+                if (info.Height > 0) meta.Height = (uint)info.Height;
+                if (info.Width > 0) meta.OriginalWidth = (uint)info.Width;
+                if (info.Height > 0) meta.OriginalHeight = (uint)info.Height;
+                meta.HasAlpha = info.HasAlpha != 0;
+                meta.FrameCount = (uint)Math.Max(1, info.FrameCount);
+                meta.HdrTransferFn = MapHdrTransferFn(info.HdrTransferFn);
+
+                // Animation gate: only flip CanAnimate when the codec advertises animation
+                // AND the file genuinely has multiple frames. Multi-page documents (e.g. TIFF)
+                // report FrameCount > 1 but must NOT trigger the animation pipeline.
+                meta.CanAnimate = SupportsAnimation && info.FrameCount > 1;
+
+                ApplyColorProfile(meta, in info);
+            }
+        }
+        finally
+        {
+            PluginHostApiTable.ReleaseCancellation(cancelHandle);
+        }
+        return meta;
+    }
+
+
+    /// <summary>
+    /// Invokes the plugin decode entry point and wraps the returned pixel buffer in a codec result.
+    /// </summary>
+    private CodecDecodeResult DecodeCore(PhotoMetadata metadata, int frameIndex, CancellationToken token)
+    {
+        if (_codecApi->DecodeStaticRaster == null || _codecApi->FreePixelBuffer == null)
+        {
+            throw new NotSupportedException($"Native codec '{CodecId}' does not support static-raster decode.");
+        }
+
+        // Register cancellation before entering native code and keep track of buffer ownership.
+        var cancelHandle = PluginHostApiTable.RegisterCancellation(token);
+        var filePath = metadata.FilePath;
+        IGPixelBuffer buffer = default;
+        var bufferOwned = false;
+        var ownershipTransferred = false;
+
+        try
+        {
+            IGStatus status;
+            try
+            {
+                // Ask the plugin to decode the requested frame into its ABI buffer struct.
+                fixed (char* pPath = filePath)
+                {
+                    var pathRef = new IGStringRef { Data = pPath, Length = filePath.Length };
+                    status = _codecApi->DecodeStaticRaster(pathRef, frameIndex, &buffer, (void*)cancelHandle);
+                }
+            }
+            catch (Exception ex)
+            {
+                _failureManager.RecordSoftFailure(_plugin.PluginId,
+                    $"managed exception during DecodeStaticRaster: {ex.Message}");
+                throw new InvalidDataException(
+                    $"IGE: Native codec '{CodecId}' threw during decode of '{filePath}'.", ex);
+            }
+
+            if (status == IGStatus.Canceled)
+            {
+                token.ThrowIfCancellationRequested();
+            }
+            if (status != IGStatus.OK)
+            {
+                throw new InvalidDataException(
+                    $"IGE: Native codec '{CodecId}' returned status {status} for '{filePath}'.");
+            }
+            bufferOwned = true;
+
+            // Wrap zero-copy: the SKImage takes ownership of the plugin buffer; when
+            // SkiaSharp disposes it, the release delegate calls back into the plugin's
+            // FreePixelBuffer (which the SDK contract requires to be thread-safe).
+            var image = WrapPluginBufferAsImage(in buffer, metadata.SkiaColorSpace);
+            ownershipTransferred = true;
+
+            // Synchronize the managed metadata dimensions with the decoded image.
+            if (metadata.Width == 0) metadata.Width = (uint)buffer.Width;
+            if (metadata.Height == 0) metadata.Height = (uint)buffer.Height;
+            if (metadata.OriginalWidth == 0) metadata.OriginalWidth = (uint)buffer.Width;
+            if (metadata.OriginalHeight == 0) metadata.OriginalHeight = (uint)buffer.Height;
+
+            // Build the final decode result the registry expects.
+            return new CodecDecodeResult
+            {
+                CodecId = $"plugin:{_plugin.PluginId}:{CodecId}",
+                ContentKind = CodecContentKind.StaticRaster,
+                Size = new Size(buffer.Width, buffer.Height),
+                SingleFrame = image,
+                IsHdr = metadata.IsHdr,
+                HasEmbeddedColorProfile = SupportsColorProfiles && metadata.SkiaColorSpace is not null,
+            };
+        }
+        finally
+        {
+            // If we never handed buffer ownership to Skia, return it to the plugin now.
+            if (bufferOwned && !ownershipTransferred)
+            {
+                try
+                {
+                    IGPixelBuffer localBuf = buffer;
+                    _codecApi->FreePixelBuffer(&localBuf);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[NativeCodecProxy] FreePixelBuffer threw: {ex.Message}");
+                }
+            }
+            PluginHostApiTable.ReleaseCancellation(cancelHandle);
+        }
+    }
+
+
+    /// <summary>
+    /// Wraps a plugin-owned <see cref="IGPixelBuffer"/> in an <see cref="SKImage"/>
+    /// without copying the pixels. The returned image owns the plugin buffer:
+    /// disposing the image calls back into the plugin's <c>FreePixelBuffer</c>
+    /// via the release delegate (which the SDK contract requires to be thread-safe).
+    /// </summary>
+    internal SKImage WrapPluginBufferAsImage(in IGPixelBuffer buffer, SKColorSpace? srcColorSpace)
+    {
+        // Validate the buffer before we hand it to Skia.
+        if (buffer.Data == null || buffer.Width <= 0 || buffer.Height <= 0)
+        {
+            throw new InvalidDataException(
+                $"IGE: Native codec '{CodecId}' returned an invalid pixel buffer.");
+        }
+
+        var (colorType, alphaType) = MapPixelFormat((IGPixelFormat)buffer.PixelFormat);
+        if (colorType == SKColorType.Unknown)
+        {
+            throw new InvalidDataException(
+                $"IGE: Native codec '{CodecId}' returned an unsupported pixel format ({buffer.PixelFormat}).");
+        }
+
+        var info = new SKImageInfo(buffer.Width, buffer.Height, colorType, alphaType);
+        if (srcColorSpace is not null)
+        {
+            info = info.WithColorSpace(srcColorSpace);
+        }
+
+        // Carrier holds the plugin codec API + a copy of the buffer descriptor so
+        // SkiaSharp can hand the pointer back to the plugin on dispose.
+        var carrier = new PluginPixelBufferRelease
+        {
+            CodecApiPtr = (nint)_codecApi,
+            Buffer = buffer,
+            PluginId = _plugin.PluginId,
+            LiveToken = _plugin.LiveToken,
+        };
+
+        // Wrap the plugin pointer in SKData with a release callback, then build the SKImage.
+        var byteCount = checked(buffer.Stride * buffer.Height);
+        var data = SKData.Create((nint)buffer.Data, byteCount,
+            PluginPixelBufferRelease.ReleaseData, carrier);
+
+        var image = SKImage.FromPixels(info, data, buffer.Stride);
+
+        if (image is null)
+        {
+            // Skia rejected the layout; release the plugin buffer ourselves.
+            data?.Dispose();
+            carrier.ReleaseFromHost();
+            throw new InvalidDataException(
+                $"IGE: Native codec '{CodecId}' returned an unsupported pixel buffer layout.");
+        }
+
+        return image;
+    }
+
+
+    /// <summary>
+    /// Maps an <see cref="IGPixelFormat"/> to the corresponding Skia color/alpha types.
+    /// Returns (<see cref="SKColorType.Unknown"/>, <see cref="SKAlphaType.Unknown"/>) when the
+    /// host has no compatible Skia format for the buffer.
+    /// </summary>
+    internal static (SKColorType ColorType, SKAlphaType AlphaType) MapPixelFormat(IGPixelFormat format)
+    {
+        return format switch
+        {
+            IGPixelFormat.Bgra8Unorm => (SKColorType.Bgra8888, SKAlphaType.Unpremul),
+            IGPixelFormat.Rgba8Unorm => (SKColorType.Rgba8888, SKAlphaType.Unpremul),
+            IGPixelFormat.Rgba16Unorm => (SKColorType.Rgba16161616, SKAlphaType.Unpremul),
+            IGPixelFormat.RgbaFloat16 => (SKColorType.RgbaF16, SKAlphaType.Unpremul),
+            _ => (SKColorType.Unknown, SKAlphaType.Unknown),
+        };
+    }
+
+
+    /// <summary>
+    /// Maps an <see cref="IGHdrTransferFn"/> integer (as carried in <see cref="IGImageInfo.HdrTransferFn"/>)
+    /// to the host's <see cref="HdrTransferFunction"/> enum.
+    /// </summary>
+    private static HdrTransferFunction MapHdrTransferFn(int value)
+    {
+        return (IGHdrTransferFn)value switch
+        {
+            IGHdrTransferFn.PQ => HdrTransferFunction.PQ,
+            IGHdrTransferFn.HLG => HdrTransferFunction.HLG,
+            IGHdrTransferFn.GainMap => HdrTransferFunction.GainMap,
+            IGHdrTransferFn.Linear => HdrTransferFunction.Linear,
+            _ => HdrTransferFunction.None,
+        };
+    }
+
+
+    /// <summary>
+    /// Resolves the source color profile from the plugin-supplied
+    /// <see cref="IGImageInfo"/> and writes it into <paramref name="meta"/>.
+    /// Prefers the raw ICC bytes (handles arbitrary profiles like ProPhoto)
+    /// and falls back to the <see cref="IGColorSpace"/> enum hint.
+    /// </summary>
+    private static void ApplyColorProfile(PhotoMetadata meta, in IGImageInfo info)
+    {
+        // Prefer raw ICC bytes when supplied. The plugin owns the buffer and
+        // both SKColorSpace.CreateIcc and PhotoColorProfile copy what they need
+        // synchronously, so we don't retain the pointer past this call.
+        SKColorSpace? skiaCs = null;
+        if (info.IccProfileData != null && info.IccProfileSize > 0)
+        {
+            try
+            {
+                // Build Skia/Magick profile objects and the human-readable profile name.
+                var iccSpan = new ReadOnlySpan<byte>(info.IccProfileData, info.IccProfileSize);
+                skiaCs = SKColorSpace.CreateIcc(iccSpan);
+
+                var bytes = iccSpan.ToArray();
+                var photoProfile = new PhotoColorProfile(bytes);
+                meta.ColorProfileName = photoProfile.GetIccDescription();
+                if (photoProfile.ProfileData is not null)
+                {
+                    meta.MagickColorProfile = new ColorProfile(photoProfile.ProfileData);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[NativeCodecProxy] ICC profile parse failed: {ex.Message}");
+            }
+        }
+
+        // Fall back to the named-enum hint if no ICC was provided.
+        skiaCs ??= MapColorSpace((IGColorSpace)info.ColorSpace);
+
+        // Store the resolved color space and the coarse Magick color-space classification.
+        if (skiaCs is not null)
+        {
+            meta.SkiaColorSpace?.Dispose();
+            meta.SkiaColorSpace = skiaCs;
+        }
+
+        meta.ColorSpace = skiaCs is not null && skiaCs.IsSrgb
+            ? ImageMagick.ColorSpace.sRGB
+            : ImageMagick.ColorSpace.Undefined;
+    }
+
+
+    /// <summary>
+    /// Maps an <see cref="IGColorSpace"/> identifier to a fresh <see cref="SKColorSpace"/>.
+    /// Returns <c>null</c> when the plugin reported <see cref="IGColorSpace.Unknown"/>;
+    /// the caller should leave the existing <see cref="PhotoMetadata.SkiaColorSpace"/> alone
+    /// (or assume sRGB) in that case.
+    /// </summary>
+    private static SKColorSpace? MapColorSpace(IGColorSpace cs)
+    {
+        return cs switch
+        {
+            IGColorSpace.Srgb => SKColorSpace.CreateSrgb(),
+            IGColorSpace.LinearSrgb => SKColorSpace.CreateSrgbLinear(),
+            IGColorSpace.DisplayP3 => SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3),
+            IGColorSpace.AdobeRgb => SKColorSpace.CreateRgb(SKColorSpaceTransferFn.TwoDotTwo, SKColorSpaceXyz.AdobeRgb),
+            IGColorSpace.Rec2020 => SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Rec2020, SKColorSpaceXyz.Rec2020),
+            IGColorSpace.Rec2020Linear => SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Linear, SKColorSpaceXyz.Rec2020),
+            _ => null,
+        };
+    }
+
+
+    /// <summary>
+    /// Releases any resources owned directly by the proxy.
+    /// </summary>
+    protected override void OnDisposing()
+    {
+        base.OnDisposing();
+    }
+}

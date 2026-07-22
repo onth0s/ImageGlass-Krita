@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+        <UseWindowsForms>true</UseWindowsForms>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Configurations>Debug;Release;Publish_Release</Configurations>
+        <Platforms>x64;ARM64</Platforms>
+        <Version>1.6.0</Version>
+        <FileVersion>$(Version)</FileVersion>
+        <Copyright>Copyright © 2010 - 2026 Duong Dieu Phap</Copyright>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ContentWithTargetPath Include="..\..\Libs\libwebp\x64\libwebp.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>libwebp.dll</TargetPath>
+        </ContentWithTargetPath>
+        <None Include="..\..\Libs\libwebp\x64\libwebp.dll" />
+
+
+        <ContentWithTargetPath Include="..\..\Libs\libwebp\x64\libsharpyuv.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>libsharpyuv.dll</TargetPath>
+        </ContentWithTargetPath>
+        <None Include="..\..\Libs\libwebp\x64\libsharpyuv.dll" />
+
+        <ContentWithTargetPath Include="..\..\Libs\libwebp\x64\libwebpdecoder.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>libwebpdecoder.dll</TargetPath>
+        </ContentWithTargetPath>
+        <None Include="..\..\Libs\libwebp\x64\libwebpdecoder.dll" />
+
+        <ContentWithTargetPath Include="..\..\Libs\libwebp\x64\libwebpdemux.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>libwebpdemux.dll</TargetPath>
+        </ContentWithTargetPath>
+        <None Include="..\..\Libs\libwebp\x64\libwebpdemux.dll" />
+
+    </ItemGroup>
+
+</Project>
