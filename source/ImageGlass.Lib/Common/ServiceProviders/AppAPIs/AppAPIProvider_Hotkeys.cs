@@ -90,6 +90,7 @@ public partial class AppAPIProvider
         new(LangId.Menu_MnuZoomOut,          API.IG_ZoomOut,             Key.Subtract),
         new(LangId.Menu_MnuAutoZoom,         API.IG_SetZoomMode, nameof(ZoomMode.AutoZoom),      [new(Key.D1), new(Key.NumPad1)]),
         new(LangId.Menu_MnuLockZoom,         API.IG_SetZoomMode, nameof(ZoomMode.LockZoom),      [new(Key.D2), new(Key.NumPad2)]),
+        new(LangId._SharedZoom,              API.IG_ToggleSharedZoom),
         new(LangId.Menu_MnuScaleToWidth,     API.IG_SetZoomMode, nameof(ZoomMode.ScaleToWidth),  [new(Key.D3), new(Key.NumPad3)]),
         new(LangId.Menu_MnuScaleToHeight,    API.IG_SetZoomMode, nameof(ZoomMode.ScaleToHeight), [new(Key.D4), new(Key.NumPad4)]),
         new(LangId.Menu_MnuScaleToFit,       API.IG_SetZoomMode, nameof(ZoomMode.ScaleToFit),    [new(Key.D5), new(Key.NumPad5)]),

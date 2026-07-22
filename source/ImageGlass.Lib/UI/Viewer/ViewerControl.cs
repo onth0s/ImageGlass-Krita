@@ -518,7 +518,9 @@ public partial class ViewerControl : PhControl
     {
         Dispatcher.UIThread.Post(() =>
         {
-            if (resetZoom)
+            var isSharedZoomApplied = ApplySharedZoomState(Photo);
+
+            if (resetZoom && !isSharedZoomApplied)
             {
                 SetZoomMode(null, isManualZoom, zoomedByResizing);
             }

@@ -1290,6 +1290,14 @@ public partial class AppAPIProvider
     public static void IG_ToggleSharedZoom()
     {
         Core.Config.EnableSharedZoom = !Core.Config.EnableSharedZoom;
+        if (Core.Config.EnableSharedZoom)
+        {
+            Viewer.CaptureSharedZoomState();
+        }
+        else
+        {
+            Viewer.Refresh(true);
+        }
     }
 
     #endregion // Zoom APIs

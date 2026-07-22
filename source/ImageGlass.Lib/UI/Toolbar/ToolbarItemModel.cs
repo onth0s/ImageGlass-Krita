@@ -343,7 +343,7 @@ public partial class ToolbarItemModel : PhReactive, IJsonOnDeserialized
     /// Checks if the button text is visible.
     /// </summary>
     [JsonIgnore]
-    public bool IsTextVisible => ShowText && !string.IsNullOrWhiteSpace(Text);
+    public bool IsTextVisible => (ShowText || string.IsNullOrEmpty(ImagePath)) && !string.IsNullOrWhiteSpace(Text);
 
 
     /// <summary>
