@@ -20,6 +20,7 @@ Instead of parsing complex proprietary raster layer data or blend modes, ImageGl
 - **Location**: [`ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodec.cs`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodec.cs)
 - Opens the `.kra` archive and checks for `mergedimage.png` first (full resolution), falling back to `preview.png` if missing.
 - Copies entry bytes directly into an in-memory `MemoryStream` so the archive handle closes immediately—**preventing Windows file locks** while working on `.kra` files in Krita.
+- Uses direct `SKImage.FromEncodedData(stream)` for fast, memory-safe rendering.
 
 ### 2. `KritaCodecAdapter.cs`
 - **Location**: [`ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodecAdapter.cs`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodecAdapter.cs)
@@ -32,9 +33,10 @@ Instead of parsing complex proprietary raster layer data or blend modes, ImageGl
 
 ---
 
-## ✅ Test Results & Verification
+## ✅ Empirical Runtime & Test Verification
 
-An automated test suite ([`KraCodecTests`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/KraCodecTests/Program.cs)) was executed against test `.kra` files in `KRA/`:
+### 1. Unit Test Suite (`KraCodecTests`)
+Executed against all sample `.kra` files in `KRA/`:
 
 ```text
 === ImageGlass Krita (.kra) Codec Test Suite ===
@@ -67,28 +69,41 @@ Found 3 test files in c:\Users\Leonardo\001\00__DEV\ImageGlass-Krita\KRA:
 === RESULTS: 3/3 Tests Passed ===
 ```
 
+### 2. Executable Boot & Process Lifecycle Test (`test_boot.ps1`)
+Automated PowerShell process lifecycle test confirming cold boot & `.kra` file launch stability:
+
+```text
+--- Testing Cold Boot (No Arguments) ---
+Cold Boot SUCCESS! Process is running (PID: 2284).
+
+--- Testing Image Launch with KRA File ---
+KRA Launch SUCCESS! Process is running (PID: 15296).
+```
+
+> [!NOTE]  
+> Build via `dotnet build -c Release -p:Platform=x64`. Avoid `dotnet publish` with experimental `PublishAot=True` as Native AOT trimming strips required Avalonia reflection metadata.
+
 ---
 
-## 🚀 How to Build & Use
+## 🚀 How to Build & Run
 
 ### Prerequisites
 - **.NET 10 SDK** (or .NET 8+)
-- Visual Studio 2022 / CLI (`dotnet`)
 
-### 1. Build Standalone Executable
-From the repository root or `ImageGlass/source` directory:
+### 1. Build Executable
+From `ImageGlass/source`:
 
 ```bash
 cd ImageGlass/source
-dotnet publish ImageGlass.Win32/ImageGlass.Win32.csproj -c Release -p:Platform=x64
+dotnet build ImageGlass.Win32/ImageGlass.Win32.csproj -c Release -p:Platform=x64
 ```
 
-### 2. Location of Published Binary
-The standalone compiled executable will be at:
-📁 **[`ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/publish/ImageGlass.exe`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/publish/ImageGlass.exe)**
+### 2. Location of Working Executable
+The compiled executable is located at:
+📁 **[`ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/ImageGlass.exe`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/ImageGlass.exe)**
 
 ### 3. File Association in Windows
 To open `.kra` files automatically with this build:
 1. Right-click any `.kra` file in Windows Explorer -> **Open with** -> **Choose another app**.
-2. Browse to `ImageGlass.exe` in the `publish` folder above.
+2. Browse to `ImageGlass.exe` in the `bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/` folder above.
 3. Select **Always use this app to open .kra files**.
