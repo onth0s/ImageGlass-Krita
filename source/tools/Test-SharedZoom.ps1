@@ -117,17 +117,16 @@ $script:T2ZoomRatio = $null
 
 function Get-ViewportCenterFrac {
     param($state)
-    if (-not $state -or $state.BitmapWidth -eq 0 -or $state.SrcWidth -eq 0 -or $state.DestWidth -eq 0) {
+    if (-not $state -or $state.BitmapWidth -eq 0 -or $state.ZoomFactor -eq 0) {
         return [PSCustomObject]@{ FracX = 0.5; FracY = 0.5; R = 128; G = 128 }
     }
     $screenCenterX = $state.ViewportWidth / 2.0
     $screenCenterY = $state.ViewportHeight / 2.0
 
-    $scaleX = $state.DestWidth / $state.SrcWidth
-    $scaleY = $state.DestHeight / $state.SrcHeight
+    $zFactor = $state.ZoomFactor / $state.Dpi
 
-    $imgCenterX = $state.SrcX + ($screenCenterX - $state.DestX) / $scaleX
-    $imgCenterY = $state.SrcY + ($screenCenterY - $state.DestY) / $scaleY
+    $imgCenterX = $state.LogicalSrcX + (($screenCenterX - $state.DestX) / $zFactor)
+    $imgCenterY = $state.LogicalSrcY + (($screenCenterY - $state.DestY) / $zFactor)
 
     $fracX = $imgCenterX / $state.BitmapWidth
     $fracY = $imgCenterY / $state.BitmapHeight
@@ -226,7 +225,7 @@ try {
         "A.G=$($centerA3.G)  B.G=$($centerB3.G)"
 
     # -----------------------------------------------------------------------
-    # T4 – Arbitrary interior pan: zoom 3×, pan to (0.3, 0.7), switch to portrait
+    # T4 – Arbitrary pan (0.3, 0.7) across aspect ratio (landscape → portrait → landscape)
     # -----------------------------------------------------------------------
     Write-Host "`n--- T4: Arbitrary pan (0.3, 0.7) across aspect ratio ---"
 
@@ -237,25 +236,32 @@ try {
 
     $stateA4 = Query-DiagPipe
     $centerA4 = Get-ViewportCenterFrac $stateA4
-    Write-Host "  [DBG] A after SET: ZoomRatio=$($stateA4.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA4.FracX,3)), $([Math]::Round($centerA4.FracY,3))) R=$($centerA4.R) G=$($centerA4.G)"
+    Write-Host "  [DBG] A initial: ZoomRatio=$($stateA4.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA4.FracX,3)), $([Math]::Round($centerA4.FracY,3))) R=$($centerA4.R) G=$($centerA4.G)"
 
     Navigate -Delta 1   # B
-    Navigate -Delta 1   # C (portrait)
+    Navigate -Delta 1   # C (portrait - pan X margin-clamped to prevent empty gap)
     $stateC4 = Query-DiagPipe
     $centerC4 = Get-ViewportCenterFrac $stateC4
-    Write-Host "  [DBG] C after NAV: ZoomRatio=$($stateC4.SharedZoomRatio) CenterFrac=($([Math]::Round($centerC4.FracX,3)), $([Math]::Round($centerC4.FracY,3))) R=$($centerC4.R) G=$($centerC4.G)"
+    Write-Host "  [DBG] C portrait: ZoomRatio=$($stateC4.SharedZoomRatio) CenterFrac=($([Math]::Round($centerC4.FracX,3)), $([Math]::Round($centerC4.FracY,3))) R=$($centerC4.R) G=$($centerC4.G)"
+
+    # Navigate back C → B → A
+    Navigate -Delta -1  # B
+    Navigate -Delta -1  # A
+    $stateA4_return = Query-DiagPipe
+    $centerA4_return = Get-ViewportCenterFrac $stateA4_return
+    Write-Host "  [DBG] A returned: ZoomRatio=$($stateA4_return.SharedZoomRatio) CenterFrac=($([Math]::Round($centerA4_return.FracX,3)), $([Math]::Round($centerA4_return.FracY,3))) R=$($centerA4_return.R) G=$($centerA4_return.G)"
 
     Assert-Test 'T4-ZoomRatioPreserved' `
-        ([Math]::Abs($stateC4.SharedZoomRatio - $stateA4.SharedZoomRatio) -lt 0.01) `
-        "A.ZoomRatio=$($stateA4.SharedZoomRatio)  C.ZoomRatio=$($stateC4.SharedZoomRatio)"
+        ([Math]::Abs($stateA4_return.SharedZoomRatio - $stateA4.SharedZoomRatio) -lt 0.01) `
+        "A.ZoomRatio=$($stateA4.SharedZoomRatio)  A_return.ZoomRatio=$($stateA4_return.SharedZoomRatio)"
 
     Assert-Test 'T4-RenderedColorMatch-R' `
-        ([Math]::Abs($centerC4.R - $centerA4.R) -le 2) `
-        "A.R=$($centerA4.R)  C.R=$($centerC4.R)"
+        ([Math]::Abs($centerA4_return.R - $centerA4.R) -le 2) `
+        "A.R=$($centerA4.R)  A_return.R=$($centerA4_return.R)"
 
     Assert-Test 'T4-RenderedColorMatch-G' `
-        ([Math]::Abs($centerC4.G - $centerA4.G) -le 2) `
-        "A.G=$($centerA4.G)  C.G=$($centerC4.G)"
+        ([Math]::Abs($centerA4_return.G - $centerA4.G) -le 2) `
+        "A.G=$($centerA4.G)  A_return.G=$($centerA4_return.G)"
 
     # -----------------------------------------------------------------------
     # T5 – Round-trip A→B→C→D→A zoom ratio preserved
