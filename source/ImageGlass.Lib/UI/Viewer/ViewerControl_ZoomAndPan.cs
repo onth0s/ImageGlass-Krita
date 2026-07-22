@@ -151,30 +151,26 @@ public partial class ViewerControl
         var scaledImgW = BitmapSize.Width * zFactor;
         var scaledImgH = BitmapSize.Height * zFactor;
 
-        double centerImgX;
-        if (scaledImgW > controlW)
+        // Only update focus point for axes that actually overflow the viewport
+        if (scaledImgW > controlW || scaledImgH > controlH)
         {
-            centerImgX = _logicalSrcPoint.X + (controlW / (2.0 * zFactor));
-        }
-        else
-        {
-            centerImgX = BitmapSize.Width / 2.0;
-        }
+            var u = _sharedZoomSavedCenterNormalized?.X ?? 0.5;
+            var v = _sharedZoomSavedCenterNormalized?.Y ?? 0.5;
 
-        double centerImgY;
-        if (scaledImgH > controlH)
-        {
-            centerImgY = _logicalSrcPoint.Y + (controlH / (2.0 * zFactor));
-        }
-        else
-        {
-            centerImgY = BitmapSize.Height / 2.0;
-        }
+            if (scaledImgW > controlW)
+            {
+                var centerImgX = _logicalSrcPoint.X + (controlW / (2.0 * zFactor));
+                u = Math.Clamp(centerImgX / BitmapSize.Width, 0, 1);
+            }
 
-        var u = Math.Clamp(centerImgX / BitmapSize.Width, 0, 1);
-        var v = Math.Clamp(centerImgY / BitmapSize.Height, 0, 1);
+            if (scaledImgH > controlH)
+            {
+                var centerImgY = _logicalSrcPoint.Y + (controlH / (2.0 * zFactor));
+                v = Math.Clamp(centerImgY / BitmapSize.Height, 0, 1);
+            }
 
-        _sharedZoomSavedCenterNormalized = new Point(u, v);
+            _sharedZoomSavedCenterNormalized = new Point(u, v);
+        }
     }
 
 
