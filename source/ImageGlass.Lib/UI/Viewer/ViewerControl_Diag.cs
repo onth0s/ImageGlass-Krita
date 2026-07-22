@@ -141,6 +141,21 @@ public partial class ViewerControl
                     }
                     return "ERR";
 
+                case "ZOOM_TO_POINT":
+                    // ZOOM_TO_POINT {ratio} {screenX} {screenY}
+                    if (parts.Length >= 4
+                        && double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var zRatio)
+                        && float.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out var sX)
+                        && float.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out var sY)
+                        && BitmapSize.Width > 0)
+                    {
+                        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height);
+                        var targetFactor = (float)(zRatio * fitFactor);
+                        ZoomToPoint(targetFactor, new Avalonia.Point(sX, sY));
+                        return "OK";
+                    }
+                    return "ERR";
+
                 case "SET_PAN":
                     // SET_PAN {normX} {normY}  — normX/Y are center-image fractions [0,1]
                     if (parts.Length >= 3

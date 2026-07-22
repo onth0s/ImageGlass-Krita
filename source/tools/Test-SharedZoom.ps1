@@ -139,6 +139,32 @@ function Get-ViewportCenterFrac {
     }
 }
 
+function Zoom-ToPoint {
+    param([double] $Ratio, [double] $ScreenX, [double] $ScreenY)
+    return (Send-DiagCmd "ZOOM_TO_POINT $Ratio $ScreenX $ScreenY")
+}
+
+function Get-PointPixelColor {
+    param($state, [double] $ScreenX, [double] $ScreenY)
+    if (-not $state -or $state.BitmapWidth -eq 0 -or $state.ZoomFactor -eq 0) {
+        return [PSCustomObject]@{ FracX = 0.5; FracY = 0.5; R = 128; G = 128 }
+    }
+    $zFactor = $state.ZoomFactor / $state.Dpi
+
+    $imgX = $state.LogicalSrcX + (($ScreenX - $state.DestX) / $zFactor)
+    $imgY = $state.LogicalSrcY + (($ScreenY - $state.DestY) / $zFactor)
+
+    $fracX = $imgX / $state.BitmapWidth
+    $fracY = $imgY / $state.BitmapHeight
+
+    return [PSCustomObject]@{
+        FracX = $fracX
+        FracY = $fracY
+        R     = [Math]::Round($fracX * 255)
+        G     = [Math]::Round($fracY * 255)
+    }
+}
+
 try {
     # -----------------------------------------------------------------------
     # T1 – Fit zoom baseline: both images start at ratio=1, pan=center
@@ -285,6 +311,32 @@ try {
     Assert-Test 'T5-RoundTripZoomRatio' `
         ([Math]::Abs($stateRT.SharedZoomRatio - $ratioBeforeTrip) -lt 0.01) `
         "expected=$ratioBeforeTrip  actual=$($stateRT.SharedZoomRatio)"
+
+    # -----------------------------------------------------------------------
+    # T6 – Arbitrary cursor zoom-to-point (200, 150) homology A → B
+    # -----------------------------------------------------------------------
+    Write-Host "`n--- T6: Zoom to cursor point (200, 150) preserved A → B ---"
+
+    Navigate -Delta -1; Navigate -Delta -1; Navigate -Delta -1 # back to A
+    Zoom-ToPoint -Ratio 2.5 -ScreenX 200 -ScreenY 150 | Out-Null
+    Start-Sleep -Milliseconds 300
+
+    $stateA6 = Query-DiagPipe
+    $ptA6 = Get-PointPixelColor $stateA6 200 150
+    Write-Host "  [DBG] A at (200,150): Frac=($([Math]::Round($ptA6.FracX,3)), $([Math]::Round($ptA6.FracY,3))) R=$($ptA6.R) G=$($ptA6.G)"
+
+    Navigate -Delta 1  # B
+    $stateB6 = Query-DiagPipe
+    $ptB6 = Get-PointPixelColor $stateB6 200 150
+    Write-Host "  [DBG] B at (200,150): Frac=($([Math]::Round($ptB6.FracX,3)), $([Math]::Round($ptB6.FracY,3))) R=$($ptB6.R) G=$($ptB6.G)"
+
+    Assert-Test 'T6-CursorColorMatch-R' `
+        ([Math]::Abs($ptB6.R - $ptA6.R) -le 2) `
+        "A.R=$($ptA6.R)  B.R=$($ptB6.R)"
+
+    Assert-Test 'T6-CursorColorMatch-G' `
+        ([Math]::Abs($ptB6.G - $ptA6.G) -le 2) `
+        "A.G=$($ptA6.G)  B.G=$($ptB6.G)"
 }
 finally {
     if ($proc -and -not $proc.HasExited) {
