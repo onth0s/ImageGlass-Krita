@@ -208,6 +208,15 @@ public partial class Config : PhReactive
     }
 
     /// <summary>
+    /// Gets, sets value indicating whether shared zoom & pan within same directory is enabled.
+    /// </summary>
+    public bool EnableSharedZoom
+    {
+        get => Get(ConfigId.EnableSharedZoom, false);
+        set => Set(ConfigId.EnableSharedZoom, value);
+    }
+
+    /// <summary>
     /// Gets, sets value indicating that multi instances is allowed.
     /// </summary>
     public bool EnableMultiInstances

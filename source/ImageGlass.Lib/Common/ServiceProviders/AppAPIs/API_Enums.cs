@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -62,6 +62,7 @@ public enum API
     IG_ZoomIn,
     IG_ZoomOut,
     IG_SetZoomMode,
+    IG_ToggleSharedZoom,
 
     // Menu > Panning
     IG_PanLeft,

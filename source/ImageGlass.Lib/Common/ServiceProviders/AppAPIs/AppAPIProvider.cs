@@ -1283,6 +1283,15 @@ public partial class AppAPIProvider
         Viewer.StartDrawingAnimation(AnimationSources.ZoomOut, 100);
     }
 
+
+    /// <summary>
+    /// Toggles the Shared Zoom feature on or off.
+    /// </summary>
+    public static void IG_ToggleSharedZoom()
+    {
+        Core.Config.EnableSharedZoom = !Core.Config.EnableSharedZoom;
+    }
+
     #endregion // Zoom APIs
 
 

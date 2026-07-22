@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -19,7 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using Avalonia;
 using Avalonia.Threading;
+using ImageGlass.Common;
 using ImageGlass.Common.Extensions;
+using ImageGlass.Common.Photoing;
 using ImageGlass.Common.Types;
 using ImageGlass.UI.Viewer.ZoomAndPan;
 using System;
@@ -38,6 +40,72 @@ public partial class ViewerControl
     /// This value is NOT clipped to image bounds, preserving the over-pan state across frames.
     /// </summary>
     private Point _logicalSrcPoint = new();
+
+    // Shared Zoom state
+    private string? _sharedZoomDir = null;
+    private double? _sharedZoomSavedFactor = null;
+    private Point? _sharedZoomSavedPanNormalized = null;
+
+    /// <summary>
+    /// Checks and applies directory-scoped shared zoom state on photo change.
+    /// Returns true if a shared transform was applied.
+    /// </summary>
+    internal bool ApplySharedZoomState(Photo? photo)
+    {
+        if (!Core.Config.EnableSharedZoom || photo is null || string.IsNullOrEmpty(photo.FilePath))
+        {
+            _sharedZoomDir = null;
+            _sharedZoomSavedFactor = null;
+            _sharedZoomSavedPanNormalized = null;
+            return false;
+        }
+
+        var newDir = System.IO.Path.GetDirectoryName(photo.FilePath);
+        if (!string.Equals(_sharedZoomDir, newDir, StringComparison.OrdinalIgnoreCase))
+        {
+            _sharedZoomDir = newDir;
+            _sharedZoomSavedFactor = null;
+            _sharedZoomSavedPanNormalized = null;
+            return false;
+        }
+
+        if (_sharedZoomSavedFactor.HasValue)
+        {
+            _zooming.Factor = _sharedZoomSavedFactor.Value;
+            _zooming.IsManual = true;
+
+            if (_sharedZoomSavedPanNormalized.HasValue && !BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
+            {
+                _logicalSrcPoint = new Point(
+                    _sharedZoomSavedPanNormalized.Value.X * BitmapSize.Width,
+                    _sharedZoomSavedPanNormalized.Value.Y * BitmapSize.Height);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Captures the current zoom and normalized pan state for Shared Zoom.
+    /// </summary>
+    internal void CaptureSharedZoomState()
+    {
+        if (!Core.Config.EnableSharedZoom || Photo is null || string.IsNullOrEmpty(Photo.FilePath))
+            return;
+
+        var currentDir = System.IO.Path.GetDirectoryName(Photo.FilePath);
+        _sharedZoomDir = currentDir;
+        _sharedZoomSavedFactor = _zooming.Factor;
+
+        if (!BitmapSize.IsEmpty && BitmapSize.Width > 0 && BitmapSize.Height > 0)
+        {
+            _sharedZoomSavedPanNormalized = new Point(
+                _logicalSrcPoint.X / BitmapSize.Width,
+                _logicalSrcPoint.Y / BitmapSize.Height);
+        }
+    }
 
 
     // Public Events
@@ -609,6 +677,7 @@ public partial class ViewerControl
         DestRect = new(destX, destY, destWidth, destHeight);
 
         _zooming.OldFactor = _zooming.Factor;
+        CaptureSharedZoomState();
     }
 
 

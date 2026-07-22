@@ -57,6 +57,7 @@ public enum LangId
     _Separator,
     _Icon,
     _Description,
+    _SharedZoom,
     _Type,
     _Version,
     _Author,

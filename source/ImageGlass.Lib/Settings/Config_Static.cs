@@ -249,6 +249,15 @@ public partial class Config
             ConfigBindingValue = $"!{nameof(CheckerboardType.None)}",
             OnClick = new(LangId.Menu_MnuToggleCheckerboard, API.IG_ToggleCheckerboard),
         },
+        // toggle shared zoom
+        new() {
+            Id = $"Btn_{nameof(IgThemeIcon.SharedZoom)}",
+            Image = nameof(IgThemeIcon.SharedZoom),
+            Text = "SZ",
+            ConfigBinding = nameof(Config.EnableSharedZoom),
+            ConfigBindingValue = "True",
+            OnClick = new(LangId._SharedZoom, API.IG_ToggleSharedZoom),
+        },
         // toggle fullscreen
         new() {
             Id = $"Btn_{nameof(IgThemeIcon.FullScreen)}",
@@ -367,6 +376,14 @@ public partial class Config
             ConfigBinding = nameof(Config.ZoomMode),
             ConfigBindingValue = ZoomMode.LockZoom.ToString(),
             OnClick = new(LangId.Menu_MnuLockZoom, API.IG_SetZoomMode, nameof(ZoomMode.LockZoom)),
+        },
+        new() {
+            Id = $"Btn_{nameof(IgThemeIcon.SharedZoom)}",
+            Image = nameof(IgThemeIcon.SharedZoom),
+            Text = "SZ",
+            ConfigBinding = nameof(Config.EnableSharedZoom),
+            ConfigBindingValue = "True",
+            OnClick = new(LangId._SharedZoom, API.IG_ToggleSharedZoom),
         },
         new() {
             Id = $"Btn_{nameof(IgThemeIcon.ScaleToWidth)}",

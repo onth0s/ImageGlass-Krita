@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -983,7 +983,8 @@ public partial class ViewerControl : PhControl
                             _lockZoomSavedSrcPoint = null;
                         }
 
-                        Refresh(_loadingOptions.ResetZoom);
+                        var appliedSharedZoom = ApplySharedZoomState(e.Photo);
+                        Refresh(appliedSharedZoom ? false : _loadingOptions.ResetZoom);
                     }
                 }
             }

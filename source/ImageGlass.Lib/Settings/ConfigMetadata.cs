@@ -75,6 +75,7 @@ public enum ConfigId
     EnableCutMultipleFiles,
     EnableFileWatcher,
     EnableAutoOpenNewAddedImage,
+    EnableSharedZoom,
     EnableDebug,
 
     #endregion // Boolean settings
