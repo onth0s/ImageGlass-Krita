@@ -89,6 +89,10 @@ public partial class MainWindowView : PhControl
         // load image from command line arguments
         LoadImagesFromCmdArgs();
 
+        // start diagnostic pipe server if --diag flag is present
+        PART_Viewer.StartDiagServer();
+        PART_Viewer.DiagNavigateRequested += PART_Viewer_DiagNavigate;
+
         StartupTrace.Mark("MainView:loaded");
         StartupTrace.Flush();
     }
@@ -117,6 +121,10 @@ public partial class MainWindowView : PhControl
         PART_Viewer.ViewerPointerPressed -= Core.Viewer_PointerPressedForPlugins;
         PART_Viewer.SelectionChanged -= Core.Viewer_SelectionChangedForPlugins;
         PART_Viewer.PhotoFrameChanged -= Core.Viewer_FrameChangedForPlugins;
+
+        // stop diagnostic pipe server
+        PART_Viewer.StopDiagServer();
+        PART_Viewer.DiagNavigateRequested -= PART_Viewer_DiagNavigate;
     }
 
 
@@ -395,6 +403,13 @@ public partial class MainWindowView : PhControl
         {
             AppAPIProvider.ApplyWindowFitMode(e.ChangeSource == ZoomChangeSource.ZoomMode);
         }
+    }
+
+
+    private async void PART_Viewer_DiagNavigate(int delta)
+    {
+        if (delta >= 1) _ = await Core.API.RunApiAsync(API.IG_ViewNext);
+        else _ = await Core.API.RunApiAsync(API.IG_ViewPrevious);
     }
 
 
