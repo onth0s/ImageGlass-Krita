@@ -91,6 +91,7 @@ public partial class AppAPIProvider
         { API.IG_PanToRight,            PhCommands.Create(IG_PanToRight) },
         { API.IG_PanToTop,              PhCommands.Create(IG_PanToTop) },
         { API.IG_PanToBottom,           PhCommands.Create(IG_PanToBottom) },
+        { API.IG_ToggleOverPan,         PhCommands.Create(IG_ToggleOverPan) },
 
 
         // Image

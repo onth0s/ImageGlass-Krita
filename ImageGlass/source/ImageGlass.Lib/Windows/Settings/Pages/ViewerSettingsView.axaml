@@ -37,11 +37,7 @@
         <!--  Panning  -->
         <ui:PhTextBlock Classes="group" LangKey="Settings_Panning" />
         <StackPanel Margin="{DynamicResource SettingsGroupIndent}" Spacing="10">
-            <CheckBox x:Name="PART_FreePan" IsVisible="False">
-                <ui:PhTextBlock LangKey="Settings_EnableFreePan" TextWrapping="Wrap" />
-            </CheckBox>
-
-            <CheckBox x:Name="PART_OverPan" IsVisible="False">
+            <CheckBox x:Name="PART_OverPan">
                 <ui:PhTextBlock LangKey="Settings_EnableOverPan" TextWrapping="Wrap" />
             </CheckBox>
 

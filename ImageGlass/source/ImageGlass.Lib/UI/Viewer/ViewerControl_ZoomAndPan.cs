@@ -322,7 +322,18 @@ public partial class ViewerControl
         set => SetValue(EnableOverPanProperty, value);
     }
     public static readonly StyledProperty<bool> EnableOverPanProperty =
-        AvaloniaProperty.Register<ViewerControl, bool>(nameof(EnableOverPan), true);
+        AvaloniaProperty.Register<ViewerControl, bool>(nameof(EnableOverPan), true,
+            coerce: (sender, value) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var control = (ViewerControl)sender;
+                    control.CalculateDrawingRegion();
+                    control.InvalidateVisual();
+                });
+
+                return value;
+            });
 
 
     /// <summary>
@@ -433,7 +444,7 @@ public partial class ViewerControl
             srcWidth = BitmapSize.Width;
             destWidth = scaledImgWidth;
 
-            if (CanUseFreePan)
+            if (CanUseFreePan || CanUseOverPan)
             {
                 if (isZoomingToPoint)
                 {
@@ -458,7 +469,7 @@ public partial class ViewerControl
             }
             else
             {
-                // No free-pan: always center the image
+                // No free-pan/over-pan: always center the image
                 destX = (controlW - scaledImgWidth) / 2.0 + DrawingArea.Left;
             }
         }
@@ -475,7 +486,7 @@ public partial class ViewerControl
                 var rawImgX = SrcRect.X + (screenZoomX - DestRect.X) / oldZoomFactor;
                 var imgX = Math.Clamp(rawImgX, 0, BitmapSize.Width);
 
-                if (!CanUseFreePan && rawImgX != imgX)
+                if (!CanUseFreePan && !CanUseOverPan && rawImgX != imgX)
                 {
                     // Cursor is in the PanMargin gap (outside the rendered image).
                     // Anchor to the image edge's current screen position instead of
@@ -508,7 +519,7 @@ public partial class ViewerControl
             srcHeight = BitmapSize.Height;
             destHeight = scaledImgHeight;
 
-            if (CanUseFreePan)
+            if (CanUseFreePan || CanUseOverPan)
             {
                 if (isZoomingToPoint)
                 {
@@ -542,7 +553,7 @@ public partial class ViewerControl
                 var rawImgY = SrcRect.Y + (screenZoomY - DestRect.Y) / oldZoomFactor;
                 var imgY = Math.Clamp(rawImgY, 0, BitmapSize.Height);
 
-                if (!CanUseFreePan && rawImgY != imgY)
+                if (!CanUseFreePan && !CanUseOverPan && rawImgY != imgY)
                 {
                     var edgeScreenY = rawImgY < 0
                         ? DestRect.Y
@@ -569,7 +580,7 @@ public partial class ViewerControl
         // panMarginSrc is PanMargin (screen px) converted to source coordinates.
         //
         // Clamping is SKIPPED during zoom-to-cursor when:
-        //   - CanUseFreePan is on: zoom-to-cursor must stay unconstrained for smooth
+        //   - CanUseFreePan/CanUseOverPan is on: zoom-to-cursor must stay unconstrained for smooth
         //     overflow ↔ fits-within transitions.
         //   - The axis just transitioned from fits-within -> overflow: skip for continuity
         //     even without FreePan.
@@ -578,7 +589,7 @@ public partial class ViewerControl
 
         // --- X-axis margin clamping ---
         var wasWidthFitting = BitmapSize.Width * oldZoomFactor <= controlW;
-        if (scaledImgWidth > controlW && !(isZoomingToPoint && (CanUseFreePan || wasWidthFitting)))
+        if (scaledImgWidth > controlW && !(isZoomingToPoint && (CanUseFreePan || CanUseOverPan || wasWidthFitting)))
         {
             // Compute per-side effective margins.
             // When CanUseOverPan is on, allow panning until 10% of the viewport width remains covered by the image.
@@ -610,7 +621,7 @@ public partial class ViewerControl
 
         // --- Y-axis margin clamping ---
         var wasHeightFitting = BitmapSize.Height * oldZoomFactor <= controlH;
-        if (scaledImgHeight > controlH && !(isZoomingToPoint && (CanUseFreePan || wasHeightFitting)))
+        if (scaledImgHeight > controlH && !(isZoomingToPoint && (CanUseFreePan || CanUseOverPan || wasHeightFitting)))
         {
             var effectiveTopMarginY = panMarginSrc;
             var effectiveBottomMarginY = panMarginSrc;
@@ -646,8 +657,8 @@ public partial class ViewerControl
         //
         // For overflow axes: store srcX/srcY directly (already margin-clamped above).
         // For fits-within axes:
-        //   - If FreePan is off: no panning state, always 0.
-        //   - If FreePan is on: back-compute the pan offset from destX/destY and clamp
+        //   - If FreePan/OverPan is off: no panning state, always 0.
+        //   - If FreePan/OverPan is on: back-compute the pan offset from destX/destY and clamp
         //     it so the image can't drift beyond its max pan position.
         //     (Zoom-to-cursor sets destX/destY directly, so this clamp only
         //     constrains subsequent panning frames.)
@@ -657,7 +668,7 @@ public partial class ViewerControl
         {
             logicalX = srcX;
         }
-        else if (CanUseFreePan)
+        else if (CanUseFreePan || CanUseOverPan)
         {
             var halfGapX = (controlW - scaledImgWidth) / 2.0;
             var maxPanSrcX = CanUseOverPan
@@ -678,7 +689,7 @@ public partial class ViewerControl
         {
             logicalY = srcY;
         }
-        else if (CanUseFreePan)
+        else if (CanUseFreePan || CanUseOverPan)
         {
             var halfGapY = (controlH - scaledImgHeight) / 2.0;
             var maxPanSrcY = CanUseOverPan

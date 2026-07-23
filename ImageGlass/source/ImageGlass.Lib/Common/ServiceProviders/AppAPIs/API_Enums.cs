@@ -74,6 +74,7 @@ public enum API
     IG_PanToRight,
     IG_PanToTop,
     IG_PanToBottom,
+    IG_ToggleOverPan,
 
     // Menu > Image
     IG_Refresh,

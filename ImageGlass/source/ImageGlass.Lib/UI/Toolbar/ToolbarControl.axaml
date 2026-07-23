@@ -216,6 +216,12 @@
                                 <ui:PhMenuItem Click="MainMenuItem_Click" LangKey="Menu_MnuPanToRightSide" />
                                 <ui:PhMenuItem Click="MainMenuItem_Click" LangKey="Menu_MnuPanToTop" />
                                 <ui:PhMenuItem Click="MainMenuItem_Click" LangKey="Menu_MnuPanToBottom" />
+                                <ui:PhMenuItem Header="-" />
+                                <ui:PhMenuItem
+                                    Click="MainMenuItem_Click"
+                                    IsChecked="{CompiledBinding Config.EnableOverPan}"
+                                    LangKey="Settings_EnableOverPan"
+                                    ToggleType="CheckBox" />
                             </ui:PhMenuItem>
 
 

@@ -107,6 +107,7 @@ public partial class AppAPIProvider
         new(LangId.Menu_MnuPanToRightSide,   API.IG_PanToRight,          [new(Hotkey.Ctrl | MKeys.Alt, Key.Right)]),
         new(LangId.Menu_MnuPanToTop,         API.IG_PanToTop,            [new(Hotkey.Ctrl | MKeys.Alt, Key.Up)]),
         new(LangId.Menu_MnuPanToBottom,      API.IG_PanToBottom,         [new(Hotkey.Ctrl | MKeys.Alt, Key.Down)]),
+        new(LangId.Settings_EnableOverPan,   API.IG_ToggleOverPan),
 
 
         // Image

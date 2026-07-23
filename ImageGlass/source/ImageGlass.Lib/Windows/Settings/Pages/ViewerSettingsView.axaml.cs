@@ -62,8 +62,6 @@ public partial class ViewerSettingsView : SettingsPageView
             LangId.Settings_CheckerboardMode, LangId.Settings_Appearance);
 
         // Panning
-        BindToggle(PART_FreePan, ConfigId.EnableFreePan,
-            LangId.Settings_EnableFreePan, LangId.Settings_Panning);
         BindToggle(PART_OverPan, ConfigId.EnableOverPan,
             LangId.Settings_EnableOverPan, LangId.Settings_Panning);
         BindDoubleInput(PART_PanMargin, ConfigId.PanMargin,

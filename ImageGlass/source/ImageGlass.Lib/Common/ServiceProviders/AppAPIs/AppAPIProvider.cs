@@ -1425,6 +1425,24 @@ public partial class AppAPIProvider
         });
     }
 
+
+    /// <summary>
+    /// Toggles over-panning on or off.
+    /// </summary>
+    public static void IG_ToggleOverPan(string? boolStr = null)
+    {
+        var enabled = string.IsNullOrEmpty(boolStr) ? null : bool.TryParse(boolStr, out var b) ? (bool?)b : null;
+        IG_ToggleOverPan(enabled);
+    }
+
+    /// <summary>
+    /// Toggles over-panning on or off.
+    /// </summary>
+    public static void IG_ToggleOverPan(bool? enabled = null)
+    {
+        Core.Config.EnableOverPan = enabled ?? !Core.Config.EnableOverPan;
+    }
+
     #endregion // Panning APIs
 
 
