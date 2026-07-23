@@ -1,47 +1,57 @@
-# Native Krita (.kra) Support in ImageGlass v10
+# Native Krita (.kra) Support & Shared Zoom in ImageGlass v10
 
-This repository contains native, high-performance **Krita (`.kra`)** image format viewing support for [ImageGlass v10](https://github.com/d2phap/imageglass).
+This repository contains custom high-performance extensions for [ImageGlass v10](https://github.com/d2phap/imageglass), featuring native **Krita (`.kra`)** image format viewing support and an upgraded **Shared Zoom & Pan** navigation engine.
 
 ---
 
-## 🎨 Overview & Feasibility
+## 🚀 Key Features & Architectural Enhancements
 
-Krita `.kra` files are OpenRaster-derived **ZIP archives**. At the root of every `.kra` container, Krita saves flattened preview images:
-- **`mergedimage.png`**: The full-resolution, high-quality rendered composite of the entire canvas.
+### 1. 🎨 Native Krita (`.kra`) Codec Support
+Krita `.kra` files are OpenRaster-derived ZIP archives. At the root of every `.kra` container, Krita saves flattened preview images:
+- **`mergedimage.png`**: The full-resolution, high-quality rendered composite of the canvas.
 - **`preview.png`**: A smaller thumbnail preview (typically 256×256 px).
 
-Instead of parsing complex proprietary raster layer data or blend modes, ImageGlass extracts `mergedimage.png` directly into memory via `System.IO.Compression.ZipArchive` and feeds it straight to the SkiaSharp rendering engine.
+#### Implementation Details:
+- **`KritaCodec.cs`** ([`ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodec.cs`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodec.cs)):
+  - Extracts `mergedimage.png` directly into an in-memory `MemoryStream`, falling back to `preview.png` if missing.
+  - Releases archive handles immediately upon reading—**preventing Windows file locks** while editing `.kra` files in Krita.
+  - Decodes images via SkiaSharp (`SKImage.FromEncodedData`).
+- **`KritaCodecAdapter.cs`** ([`ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodecAdapter.cs`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodecAdapter.cs)):
+  - Registered with `CodecId = "krita.skia"` with elevated `MetadataPriority` and `DecodePriority` (200) to outrank generic decoders.
+- **Registry Integration**: Integrated into `CodecRegistry.cs` and `Const.IMAGE_FORMATS` for automatic `.kra` file association.
 
 ---
 
-## 🛠️ Architecture & Implementation
+### 2. 🔍 Synchronized Shared Zoom Engine
+When comparing multiple rendered assets or artwork iterations, **Shared Zoom** locks the zoom level and view position across image transitions.
 
-### 1. `KritaCodec.cs`
-- **Location**: [`ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodec.cs`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodec.cs)
-- Opens the `.kra` archive and checks for `mergedimage.png` first (full resolution), falling back to `preview.png` if missing.
-- Copies entry bytes directly into an in-memory `MemoryStream` so the archive handle closes immediately—**preventing Windows file locks** while working on `.kra` files in Krita.
-- Uses direct `SKImage.FromEncodedData(stream)` for fast, memory-safe rendering.
-
-### 2. `KritaCodecAdapter.cs`
-- **Location**: [`ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodecAdapter.cs`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Lib/Common/Photoing/Codecs/KraCodecs/KritaCodecAdapter.cs)
-- Implements `ICodec` and inherits `PhDisposable`.
-- Registered with `CodecId = "krita.skia"`, `MetadataPriority = 200`, and `DecodePriority = 200` to outrank generic fallback decoders.
-
-### 3. Core Registry & Format Integration
-- **`CodecRegistry.cs`**: Registered `KritaCodecAdapter` in the constructor and added it to `GetCodecInfos()` as a built-in codec.
-- **`Const.cs`**: Appended `.kra` to `Const.IMAGE_FORMATS` for automatic default file associations and settings UI display.
-- **`ImageGlass.Win32.csproj`**: Configured `_themes` (`Kobe` & `Kobe-Light`) and app asset bundling to ensure clean boot initialization.
+#### Core Mechanics:
+- **Viewport-Center Fractional Pan Coordinates**:
+  - Uses normalized center fractions (`SharedZoomCenterFracX`, `SharedZoomCenterFracY`) relative to image dimensions rather than raw pixel offsets.
+  - Maintains subject focus seamlessly across images of different aspect ratios and resolutions without edge clipping or jumping.
+- **Preview Race Condition Prevention**:
+  - Bypasses preview buffer rendering while Shared Zoom is active to prevent lower-resolution preview frames from resetting viewport coordinates during rapid navigation.
+- **UI & Theme Integration**:
+  - Integrated into the main toolbar and main menu.
+  - Includes custom theme assets (`SharedZoom.svg`) across `Kobe` (dark) and `Kobe-Light` themes.
 
 ---
 
-## ✅ Empirical Verification
+### 3. 🛠️ Hotkey & Stability Fixes
+- **Hotkey Parsing**: Resolved exceptions during hotkey string serialization and custom keybinding initialization (`Hotkey.cs`).
+- **Debug Message Action**: Mapped key `S` to trigger on-screen debug diagnostic logging (`AppAPIProvider_Hotkeys.cs`).
+- **Preview Buffering Toggle**: Disabled asynchronous image preview buffering (`IsBufferedPreview = false`) for crisp, immediate frame rendering.
 
-### 1. Unit Test Suite (`KraCodecTests`)
-Executed against all sample `.kra` files in `KRA/`:
+---
+
+## ✅ Empirical Verification & Diagnostics
+
+### 1. Krita Codec Test Suite (`KraCodecTests`)
+Verified against `.kra` test samples in `KRA/`:
 
 ```text
 === ImageGlass Krita (.kra) Codec Test Suite ===
-Found 3 test files in c:\Users\Leonardo\001\00__DEV\ImageGlass-Krita\KRA:
+Found 3 test files in KRA/:
 
 --- Testing: foot_and_leg_study.kra ---
   IsKraFile: True
@@ -70,34 +80,36 @@ Found 3 test files in c:\Users\Leonardo\001\00__DEV\ImageGlass-Krita\KRA:
 === RESULTS: 3/3 Tests Passed ===
 ```
 
-### 2. Process Boot & Runtime Verification (`test_boot.ps1`)
-Automated PowerShell process lifecycle test confirming cold boot & `.kra` file launch stability:
+### 2. Shared Zoom Homology Suite
+- 12/12 test scenarios passing across landscape, portrait, and square images verifying exact pixel color homology and pan ratio stability.
 
-```text
---- Testing Cold Boot (No Arguments) ---
-Cold Boot SUCCESS! Process is running (PID: 3348).
+---
 
---- Testing Image Launch with KRA File ---
-KRA Launch SUCCESS! Process is running (PID: 4752).
+## 📦 How to Build & Install
+
+### Option A: Automated Build Script (Recommended)
+Run the automated PowerShell build script from the repository root:
+
+```powershell
+.\build.ps1
+```
+*Note: `build.ps1` automatically terminates running ImageGlass instances to release file locks before performing an `x64 Release` build.*
+
+### Option B: Manual CLI Build
+From the repository root, execute:
+
+```bash
+dotnet build ImageGlass/source/ImageGlass.Win32 -p:Platform=x64 -c Release
 ```
 
 ---
 
-## 🚀 How to Build & Install to Program Files
+### Deployment to System Program Files
 
-### 1. Build Executable
-From `ImageGlass/source`:
+1. Navigate to the build output directory:
+   📁 [`ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/)
 
-```bash
-cd ImageGlass/source
-dotnet build ImageGlass.Win32/ImageGlass.Win32.csproj -c Release -p:Platform=x64
-```
+2. Copy all output files and overwrite your existing installation in:
+   `C:\Program Files\ImageGlass\`
 
-### 2. Move to Program Files
-Copy the contents of the build folder:
-📁 **[`ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/`](file:///c:/Users/Leonardo/001/00__DEV/ImageGlass-Krita/ImageGlass/source/ImageGlass.Win32/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/)**
-
-into `C:\Program Files\ImageGlass\` (replacing the vanilla installation files).
-
-### 3. File Association
-Double-click any `.kra` file in Windows Explorer to open it natively in ImageGlass!
+3. Launch ImageGlass and set file associations for `.kra` files!
