@@ -83,14 +83,24 @@ public partial class ViewerControl
         _zooming.IsManual = true;
 
         // 2. Restore pan: place the saved image-center fraction at the viewport center.
-        //    srcTopLeft = centerFrac * imageSize - halfViewportInImagePixels
+        //    For overflow (scaled > control): srcTopLeft = centerFrac * imageSize - halfViewportInImagePixels
+        //    For fit (scaled <= control): _logicalSrcPoint represents pan offset from center (0 = centered)
         var zFactor = _zooming.Factor / Dpi;
+        var scaledW = BitmapSize.Width * zFactor;
+        var scaledH = BitmapSize.Height * zFactor;
+
         var halfViewW = controlW / (2.0 * zFactor);
         var halfViewH = controlH / (2.0 * zFactor);
 
-        _logicalSrcPoint = new Point(
-            _sharedZoomPanNormX * BitmapSize.Width  - halfViewW,
-            _sharedZoomPanNormY * BitmapSize.Height - halfViewH);
+        var logX = scaledW > controlW
+            ? _sharedZoomPanNormX * BitmapSize.Width - halfViewW
+            : (0.5 - _sharedZoomPanNormX) * BitmapSize.Width;
+
+        var logY = scaledH > controlH
+            ? _sharedZoomPanNormY * BitmapSize.Height - halfViewH
+            : (0.5 - _sharedZoomPanNormY) * BitmapSize.Height;
+
+        _logicalSrcPoint = new Point(logX, logY);
 
         CalculateDrawingRegion();
         return true;
@@ -123,14 +133,23 @@ public partial class ViewerControl
         //    images of different pixel sizes at the same zoom ratio:
         //    the same content fraction appears at the same screen position.
         //
-        //    center = srcTopLeft + half_viewport_in_image_pixels
+        //    center = srcTopLeft + half_viewport_in_image_pixels (for overflow)
+        //    center = 0.5 * imageSize - pan_offset (for fit)
         //    frac   = center / imageSize   (clamped 0..1)
         var zFactor = _zooming.Factor / Dpi;
+        var scaledW = BitmapSize.Width * zFactor;
+        var scaledH = BitmapSize.Height * zFactor;
+
         var halfViewW = controlW / (2.0 * zFactor);
         var halfViewH = controlH / (2.0 * zFactor);
 
-        var centerX = _logicalSrcPoint.X + halfViewW;
-        var centerY = _logicalSrcPoint.Y + halfViewH;
+        var centerX = scaledW > controlW
+            ? _logicalSrcPoint.X + halfViewW
+            : 0.5 * BitmapSize.Width - _logicalSrcPoint.X;
+
+        var centerY = scaledH > controlH
+            ? _logicalSrcPoint.Y + halfViewH
+            : 0.5 * BitmapSize.Height - _logicalSrcPoint.Y;
 
         var viewWInSrc = controlW / zFactor;
         var viewHInSrc = controlH / zFactor;
