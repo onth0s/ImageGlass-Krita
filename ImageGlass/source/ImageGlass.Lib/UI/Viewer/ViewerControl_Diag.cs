@@ -169,8 +169,17 @@ public partial class ViewerControl
                         var halfViewW = controlW / (2.0 * zFactor);
                         var halfViewH = controlH / (2.0 * zFactor);
 
-                        _sharedZoomPanNormX = Math.Clamp(normX, 0, 1);
-                        _sharedZoomPanNormY = Math.Clamp(normY, 0, 1);
+                        var viewWInSrc = controlW / zFactor;
+                        var viewHInSrc = controlH / zFactor;
+
+                        var minNormX = CanUseOverPan ? -0.40 * viewWInSrc / BitmapSize.Width : 0.0;
+                        var maxNormX = CanUseOverPan ? 1.0 + 0.40 * viewWInSrc / BitmapSize.Width : 1.0;
+
+                        var minNormY = CanUseOverPan ? -0.40 * viewHInSrc / BitmapSize.Height : 0.0;
+                        var maxNormY = CanUseOverPan ? 1.0 + 0.40 * viewHInSrc / BitmapSize.Height : 1.0;
+
+                        _sharedZoomPanNormX = Math.Clamp(normX, minNormX, maxNormX);
+                        _sharedZoomPanNormY = Math.Clamp(normY, minNormY, maxNormY);
 
                         _logicalSrcPoint = new Avalonia.Point(
                             _sharedZoomPanNormX * BitmapSize.Width  - halfViewW,

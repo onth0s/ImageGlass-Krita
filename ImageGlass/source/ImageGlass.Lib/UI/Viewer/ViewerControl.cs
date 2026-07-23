@@ -525,25 +525,21 @@ public partial class ViewerControl : PhControl
 
         Dispatcher.UIThread.Post(() =>
         {
-            bool isSharedZoomApplied;
-            if (sharedZoomAlreadyApplied)
-            {
-                // Already applied by caller — just recalculate rects without touching zoom/pan state
-                isSharedZoomApplied = true;
-                CalculateDrawingRegion();
-            }
-            else
-            {
-                isSharedZoomApplied = ApplySharedZoomState(Photo);
-            }
-
-            if (resetZoom && !isSharedZoomApplied)
+            if (resetZoom)
             {
                 SetZoomMode(null, isManualZoom, zoomedByResizing);
             }
-            else if (!sharedZoomAlreadyApplied)
+            else
             {
-                CalculateDrawingRegion();
+                if (sharedZoomAlreadyApplied)
+                {
+                    // Already applied by caller — just recalculate rects without touching zoom/pan state
+                    CalculateDrawingRegion();
+                }
+                else if (!ApplySharedZoomState(Photo))
+                {
+                    CalculateDrawingRegion();
+                }
             }
 
             InvalidateVisual();

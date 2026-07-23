@@ -132,13 +132,23 @@ public partial class ViewerControl
         var centerX = _logicalSrcPoint.X + halfViewW;
         var centerY = _logicalSrcPoint.Y + halfViewH;
 
-        // Only overwrite an axis when the image overflows on that axis; otherwise the
-        // saved fraction is preserved so navigating through small images doesn't corrupt it.
-        var maxPanX = Math.Max(0.0, BitmapSize.Width  - controlW / zFactor);
-        var maxPanY = Math.Max(0.0, BitmapSize.Height - controlH / zFactor);
+        var viewWInSrc = controlW / zFactor;
+        var viewHInSrc = controlH / zFactor;
 
-        if (maxPanX > 0) _sharedZoomPanNormX = Math.Clamp(centerX / BitmapSize.Width,  0, 1);
-        if (maxPanY > 0) _sharedZoomPanNormY = Math.Clamp(centerY / BitmapSize.Height, 0, 1);
+        var minNormX = CanUseOverPan ? -0.40 * viewWInSrc / BitmapSize.Width : 0.0;
+        var maxNormX = CanUseOverPan ? 1.0 + 0.40 * viewWInSrc / BitmapSize.Width : 1.0;
+
+        var minNormY = CanUseOverPan ? -0.40 * viewHInSrc / BitmapSize.Height : 0.0;
+        var maxNormY = CanUseOverPan ? 1.0 + 0.40 * viewHInSrc / BitmapSize.Height : 1.0;
+
+        var maxPanX = Math.Max(0.0, BitmapSize.Width  - viewWInSrc);
+        var maxPanY = Math.Max(0.0, BitmapSize.Height - viewHInSrc);
+
+        if (CanUseOverPan || CanUseFreePan || maxPanX > 0)
+            _sharedZoomPanNormX = Math.Clamp(centerX / BitmapSize.Width, minNormX, maxNormX);
+
+        if (CanUseOverPan || CanUseFreePan || maxPanY > 0)
+            _sharedZoomPanNormY = Math.Clamp(centerY / BitmapSize.Height, minNormY, maxNormY);
     }
 
 
