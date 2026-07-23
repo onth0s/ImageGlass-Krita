@@ -41,6 +41,10 @@
                 <ui:PhTextBlock LangKey="Settings_EnableFreePan" TextWrapping="Wrap" />
             </CheckBox>
 
+            <CheckBox x:Name="PART_OverPan" IsVisible="False">
+                <ui:PhTextBlock LangKey="Settings_EnableOverPan" TextWrapping="Wrap" />
+            </CheckBox>
+
             <!--  Panning margin  -->
             <StackPanel IsVisible="False" Spacing="{DynamicResource SettingsLabelInputGap}">
                 <ui:PhTextBlock LangKey="Settings_PanMargin" />

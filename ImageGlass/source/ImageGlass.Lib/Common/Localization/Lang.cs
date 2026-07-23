@@ -998,6 +998,7 @@ public class Lang
         // Viewer > Panning
         new(LangId.Settings_Panning, "Panning"),
         new(LangId.Settings_EnableFreePan, "Enable free panning"),
+        new(LangId.Settings_EnableOverPan, "Enable over-panning"),
         new(LangId.Settings_PanMargin, "Panning margin: {0}"),
         new(LangId.Settings_PanSpeed, "Panning speed: {0}"),
 

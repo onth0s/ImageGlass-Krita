@@ -64,6 +64,8 @@ public partial class ViewerSettingsView : SettingsPageView
         // Panning
         BindToggle(PART_FreePan, ConfigId.EnableFreePan,
             LangId.Settings_EnableFreePan, LangId.Settings_Panning);
+        BindToggle(PART_OverPan, ConfigId.EnableOverPan,
+            LangId.Settings_EnableOverPan, LangId.Settings_Panning);
         BindDoubleInput(PART_PanMargin, ConfigId.PanMargin,
             LangId.Settings_PanMargin, LangId.Settings_Panning);
         BindSlider(PART_PanSpeed, ConfigId.PanSpeed,

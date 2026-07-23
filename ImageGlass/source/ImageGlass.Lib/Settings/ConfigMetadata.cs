@@ -51,6 +51,7 @@ public enum ConfigId
     EnableMultiInstances,
     EnableWindowTopMost,
     EnableFreePan,
+    EnableOverPan,
     EnableDeleteConfirmation,
     EnableSaveConfirmation,
     EnablePreserveModifiedDate,

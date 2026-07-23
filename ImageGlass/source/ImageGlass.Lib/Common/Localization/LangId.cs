@@ -565,6 +565,7 @@ public enum LangId
     // Viewer > Panning
     Settings_Panning,
     Settings_EnableFreePan,
+    Settings_EnableOverPan,
     Settings_PanMargin,
     Settings_PanSpeed,
 

@@ -244,6 +244,15 @@ public partial class Config : PhReactive
     }
 
     /// <summary>
+    /// Gets, sets value indicating whether over-panning is allowed.
+    /// </summary>
+    public bool EnableOverPan
+    {
+        get => Get(ConfigId.EnableOverPan, true);
+        set => Set(ConfigId.EnableOverPan, value);
+    }
+
+    /// <summary>
     /// Gets, sets value indicates that Confirmation dialog is displayed when deleting image
     /// </summary>
     public bool EnableDeleteConfirmation

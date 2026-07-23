@@ -313,6 +313,25 @@ public partial class ViewerControl
 
 
     /// <summary>
+    /// Gets, sets a value indicating whether over-panning is allowed.
+    /// When enabled, the user can pan until only 10% of the image/viewport edge remains visible.
+    /// </summary>
+    public bool EnableOverPan
+    {
+        get => GetValue(EnableOverPanProperty);
+        set => SetValue(EnableOverPanProperty, value);
+    }
+    public static readonly StyledProperty<bool> EnableOverPanProperty =
+        AvaloniaProperty.Register<ViewerControl, bool>(nameof(EnableOverPan), true);
+
+
+    /// <summary>
+    /// Gets a value indicating whether over-panning is currently available.
+    /// </summary>
+    public bool CanUseOverPan => EnableOverPan && !IsWindowFitMode;
+
+
+    /// <summary>
     /// Gets, sets the maximum panning margin in screen pixels beyond the image edge.
     /// </summary>
     public double PanMargin
@@ -429,8 +448,10 @@ public partial class ViewerControl
                 else
                 {
                     // Panning or static: center image, then offset by the pan amount.
-                    // The pan offset is clamped so the image can't move beyond its centered position.
-                    var maxPanScreenX = (controlW - scaledImgWidth) / 2.0;
+                    // When CanUseOverPan is enabled, allow panning until only 10% of the image remains visible.
+                    var maxPanScreenX = CanUseOverPan
+                        ? (controlW + 0.80 * scaledImgWidth) / 2.0
+                        : (controlW - scaledImgWidth) / 2.0;
                     var panOffsetX = Math.Clamp(_logicalSrcPoint.X * currentZoomFactor, -maxPanScreenX, maxPanScreenX);
                     destX = (controlW - scaledImgWidth) / 2.0 + DrawingArea.Left - panOffsetX;
                 }
@@ -498,7 +519,9 @@ public partial class ViewerControl
                 }
                 else
                 {
-                    var maxPanScreenY = (controlH - scaledImgHeight) / 2.0;
+                    var maxPanScreenY = CanUseOverPan
+                        ? (controlH + 0.80 * scaledImgHeight) / 2.0
+                        : (controlH - scaledImgHeight) / 2.0;
                     var panOffsetY = Math.Clamp(_logicalSrcPoint.Y * currentZoomFactor, -maxPanScreenY, maxPanScreenY);
                     destY = (controlH - scaledImgHeight) / 2.0 + DrawingArea.Top - panOffsetY;
                 }
@@ -558,17 +581,21 @@ public partial class ViewerControl
         if (scaledImgWidth > controlW && !(isZoomingToPoint && (CanUseFreePan || wasWidthFitting)))
         {
             // Compute per-side effective margins.
-            // When CanUseFreePan is on, use the PREVIOUS frame's edge gap (from DestRect,
-            // which hasn't been overwritten yet) as a floor. This "ratchet" preserves the
-            // over-pan established by zoom-to-cursor — the user can pan back but not further out.
+            // When CanUseOverPan is on, allow panning until 10% of the viewport width remains covered by the image.
             var effectiveLeftMarginX = panMarginSrc;
             var effectiveRightMarginX = panMarginSrc;
+            if (CanUseOverPan)
+            {
+                var overPanMarginX = 0.90 * srcWidth;
+                effectiveLeftMarginX = Math.Max(effectiveLeftMarginX, overPanMarginX);
+                effectiveRightMarginX = Math.Max(effectiveRightMarginX, overPanMarginX);
+            }
             if (CanUseFreePan)
             {
                 var prevLeftGap = Math.Max(0, DestRect.X - DrawingArea.Left) / currentZoomFactor;
                 var prevRightGap = Math.Max(0, DrawingArea.Left + controlW - (DestRect.X + DestRect.Width)) / currentZoomFactor;
-                effectiveLeftMarginX = Math.Max(panMarginSrc, prevLeftGap);
-                effectiveRightMarginX = Math.Max(panMarginSrc, prevRightGap);
+                effectiveLeftMarginX = Math.Max(effectiveLeftMarginX, prevLeftGap);
+                effectiveRightMarginX = Math.Max(effectiveRightMarginX, prevRightGap);
             }
 
             if (srcX < -effectiveLeftMarginX)
@@ -587,12 +614,18 @@ public partial class ViewerControl
         {
             var effectiveTopMarginY = panMarginSrc;
             var effectiveBottomMarginY = panMarginSrc;
+            if (CanUseOverPan)
+            {
+                var overPanMarginY = 0.90 * srcHeight;
+                effectiveTopMarginY = Math.Max(effectiveTopMarginY, overPanMarginY);
+                effectiveBottomMarginY = Math.Max(effectiveBottomMarginY, overPanMarginY);
+            }
             if (CanUseFreePan)
             {
                 var prevTopGap = Math.Max(0, DestRect.Y - DrawingArea.Top) / currentZoomFactor;
                 var prevBottomGap = Math.Max(0, DrawingArea.Top + controlH - (DestRect.Y + DestRect.Height)) / currentZoomFactor;
-                effectiveTopMarginY = Math.Max(panMarginSrc, prevTopGap);
-                effectiveBottomMarginY = Math.Max(panMarginSrc, prevBottomGap);
+                effectiveTopMarginY = Math.Max(effectiveTopMarginY, prevTopGap);
+                effectiveBottomMarginY = Math.Max(effectiveBottomMarginY, prevBottomGap);
             }
 
             if (srcY + srcHeight > BitmapSize.Height + effectiveBottomMarginY)
@@ -615,7 +648,7 @@ public partial class ViewerControl
         // For fits-within axes:
         //   - If FreePan is off: no panning state, always 0.
         //   - If FreePan is on: back-compute the pan offset from destX/destY and clamp
-        //     it so the image can't drift beyond its centered position.
+        //     it so the image can't drift beyond its max pan position.
         //     (Zoom-to-cursor sets destX/destY directly, so this clamp only
         //     constrains subsequent panning frames.)
 
@@ -627,10 +660,13 @@ public partial class ViewerControl
         else if (CanUseFreePan)
         {
             var halfGapX = (controlW - scaledImgWidth) / 2.0;
+            var maxPanSrcX = CanUseOverPan
+                ? (halfGapX + 0.90 * scaledImgWidth) / currentZoomFactor
+                : halfGapX / currentZoomFactor;
             logicalX = Math.Clamp(
                 (halfGapX + DrawingArea.Left - destX) / currentZoomFactor,
-                -halfGapX / currentZoomFactor,
-                halfGapX / currentZoomFactor);
+                -maxPanSrcX,
+                maxPanSrcX);
         }
         else
         {
@@ -645,10 +681,13 @@ public partial class ViewerControl
         else if (CanUseFreePan)
         {
             var halfGapY = (controlH - scaledImgHeight) / 2.0;
+            var maxPanSrcY = CanUseOverPan
+                ? (halfGapY + 0.90 * scaledImgHeight) / currentZoomFactor
+                : halfGapY / currentZoomFactor;
             logicalY = Math.Clamp(
                 (halfGapY + DrawingArea.Top - destY) / currentZoomFactor,
-                -halfGapY / currentZoomFactor,
-                halfGapY / currentZoomFactor);
+                -maxPanSrcY,
+                maxPanSrcY);
         }
         else
         {
