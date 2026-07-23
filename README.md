@@ -37,7 +37,15 @@ When comparing multiple rendered assets or artwork iterations, **Shared Zoom** l
 
 ---
 
-### 3. 🛠️ Hotkey & Stability Fixes
+### 3. 🖐️ Configurable Over-Panning Engine
+Enables panning past standard image boundaries until only 10% of the closest image edge remains visible in the viewport.
+- **Dynamic Over-Pan Clamping**: Computes dynamic margins for both overflowing and fitting (FreePan) axes so up to 90% of the viewport/image dimension can be panned out of view.
+- **Seamless Shared Zoom Integration**: Calculates and preserves over-panned normalized center fractions (`_sharedZoomPanNormX/Y`) across photo transitions.
+- **UI & Context Menu Integration**: Includes an `EnableOverPan` setting (enabled by default) in **Settings → Viewer → Panning** as well as a quick toggle directly in the right-click menu (**Panning → Enable over-panning**).
+
+---
+
+### 4. 🛠️ Hotkey & Stability Fixes
 - **Hotkey Parsing**: Resolved exceptions during hotkey string serialization and custom keybinding initialization (`Hotkey.cs`).
 - **Debug Message Action**: Mapped key `S` to trigger on-screen debug diagnostic logging (`AppAPIProvider_Hotkeys.cs`).
 - **Preview Buffering Toggle**: Disabled asynchronous image preview buffering (`IsBufferedPreview = false`) for crisp, immediate frame rendering.
