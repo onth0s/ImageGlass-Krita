@@ -94,11 +94,11 @@ public partial class ViewerControl
 
         var logX = scaledW > controlW
             ? _sharedZoomPanNormX * BitmapSize.Width - halfViewW
-            : (0.5 - _sharedZoomPanNormX) * BitmapSize.Width;
+            : (_sharedZoomPanNormX - 0.5) * BitmapSize.Width;
 
         var logY = scaledH > controlH
             ? _sharedZoomPanNormY * BitmapSize.Height - halfViewH
-            : (0.5 - _sharedZoomPanNormY) * BitmapSize.Height;
+            : (_sharedZoomPanNormY - 0.5) * BitmapSize.Height;
 
         _logicalSrcPoint = new Point(logX, logY);
 
@@ -134,7 +134,7 @@ public partial class ViewerControl
         //    the same content fraction appears at the same screen position.
         //
         //    center = srcTopLeft + half_viewport_in_image_pixels (for overflow)
-        //    center = 0.5 * imageSize - pan_offset (for fit)
+        //    center = 0.5 * imageSize + pan_offset (for fit)
         //    frac   = center / imageSize   (clamped 0..1)
         var zFactor = _zooming.Factor / Dpi;
         var scaledW = BitmapSize.Width * zFactor;
@@ -145,11 +145,11 @@ public partial class ViewerControl
 
         var centerX = scaledW > controlW
             ? _logicalSrcPoint.X + halfViewW
-            : 0.5 * BitmapSize.Width - _logicalSrcPoint.X;
+            : 0.5 * BitmapSize.Width + _logicalSrcPoint.X;
 
         var centerY = scaledH > controlH
             ? _logicalSrcPoint.Y + halfViewH
-            : 0.5 * BitmapSize.Height - _logicalSrcPoint.Y;
+            : 0.5 * BitmapSize.Height + _logicalSrcPoint.Y;
 
         var viewWInSrc = controlW / zFactor;
         var viewHInSrc = controlH / zFactor;
