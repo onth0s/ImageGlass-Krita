@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -62,6 +62,11 @@ public class ViewerPointerClickEventArgs(RoutedEventArgs e, MouseClickEvent clic
     /// Gets the mouse click event that triggered this action.
     /// </summary>
     public MouseClickEvent ClickEvent => clickEvent;
+
+    /// <summary>
+    /// Gets the key modifiers associated with the pointer click event.
+    /// </summary>
+    public KeyModifiers Modifiers => (e as PointerEventArgs)?.KeyModifiers ?? (e as TappedEventArgs)?.KeyModifiers ?? KeyModifiers.None;
 }
 
 

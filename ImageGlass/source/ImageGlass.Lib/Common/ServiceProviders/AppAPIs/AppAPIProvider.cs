@@ -1202,18 +1202,21 @@ public partial class AppAPIProvider
 
     /// <summary>
     /// Sets zoom = 100% if zoom value is less than 100%.
-    /// Otherwise, refresh the image with the current zoom mode.
+    /// <summary>
+    /// Cycles zoom between actual image size (100%) and fit-to-window.
+    /// Centered by default on the vertical (Y) axis, keeping horizontal (X) axis position
+    /// unless centerBothAxes is true (e.g. Shift key held).
     /// </summary>
-    public static void IG_SetZoomForMouseClick()
+    public static void IG_SetZoomForMouseClick() => IG_SetZoomForMouseClick(false);
+
+    /// <summary>
+    /// Cycles zoom between actual image size (100%) and fit-to-window.
+    /// Centered by default on the vertical (Y) axis, keeping horizontal (X) axis position
+    /// unless centerBothAxes is true (e.g. Shift key held).
+    /// </summary>
+    public static void IG_SetZoomForMouseClick(bool centerBothAxes)
     {
-        if (Viewer.ZoomFactor < 1)
-        {
-            IG_SetZoom(1);
-        }
-        else
-        {
-            IG_Refresh();
-        }
+        Viewer.ToggleZoomActualSizeAndFit(centerBothAxes);
     }
 
 

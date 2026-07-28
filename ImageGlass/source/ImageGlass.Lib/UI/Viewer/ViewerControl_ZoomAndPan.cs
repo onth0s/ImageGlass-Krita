@@ -864,6 +864,97 @@ public partial class ViewerControl
 
 
     /// <summary>
+    /// Cycles zoom between actual image size (1.0 factor = 100%) and fit-to-window.
+    /// Centered by default on the vertical (Y) axis.
+    /// Keeps the horizontal (X) axis position unless centerBothAxes is true (e.g. Shift held).
+    /// </summary>
+    public void ToggleZoomActualSizeAndFit(bool centerBothAxes = false)
+    {
+        if (BitmapSize.IsEmpty || BitmapSize.Width <= 0 || BitmapSize.Height <= 0) return;
+
+        var controlW = DrawingArea.Width > 0 ? DrawingArea.Width : Bounds.Width > 0 ? Bounds.Width - Padding.Left - Padding.Right : 800;
+        var controlH = DrawingArea.Height > 0 ? DrawingArea.Height : Bounds.Height > 0 ? Bounds.Height - Padding.Top - Padding.Bottom : 600;
+
+        var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height, controlW, controlH);
+
+        var targetFactor = Math.Abs(_zooming.Factor - 1.0) < 0.001 ? fitFactor : 1.0;
+        var isManualZoom = Math.Abs(targetFactor - fitFactor) > 0.001;
+
+        _zooming.OldFactor = _zooming.Factor;
+        _zooming.Factor = Math.Min(MaxZoom, Math.Max(targetFactor, MinZoom));
+        _zooming.IsManual = isManualZoom;
+        _zooming.ZoomedPoint = default;
+
+        var zFactor = _zooming.Factor / Dpi;
+        var scaledW = BitmapSize.Width * zFactor;
+        var scaledH = BitmapSize.Height * zFactor;
+
+        var halfViewW = controlW / (2.0 * zFactor);
+        var halfViewH = controlH / (2.0 * zFactor);
+
+        // Y-axis: Centered by default
+        var logY = scaledH > controlH
+            ? 0.5 * BitmapSize.Height - halfViewH
+            : 0;
+
+        // X-axis: Centered if centerBothAxes is true (Shift held), otherwise keep current X position
+        double logX;
+        if (centerBothAxes)
+        {
+            logX = scaledW > controlW
+                ? 0.5 * BitmapSize.Width - halfViewW
+                : 0;
+        }
+        else
+        {
+            var prevZFactor = _zooming.OldFactor / Dpi;
+            var prevScaledW = BitmapSize.Width * prevZFactor;
+
+            if (scaledW > controlW)
+            {
+                if (prevScaledW > controlW)
+                {
+                    logX = _logicalSrcPoint.X;
+                }
+                else
+                {
+                    var normX = 0.5 + (_logicalSrcPoint.X / BitmapSize.Width);
+                    logX = normX * BitmapSize.Width - halfViewW;
+                }
+            }
+            else
+            {
+                if (prevScaledW > controlW)
+                {
+                    var centerX = _logicalSrcPoint.X + (controlW / (2.0 * prevZFactor));
+                    var normX = centerX / BitmapSize.Width;
+                    logX = (normX - 0.5) * BitmapSize.Width;
+                }
+                else
+                {
+                    logX = _logicalSrcPoint.X;
+                }
+            }
+        }
+
+        _logicalSrcPoint = new Point(logX, logY);
+
+        CalculateDrawingRegion();
+        CaptureSharedZoomState();
+        InvalidateVisual();
+
+        ZoomChanged?.Invoke(this, new ViewerZoomEventArgs()
+        {
+            ZoomFactor = _zooming.Factor,
+            IsManualZoom = _zooming.IsManual,
+            IsZoomModeChange = false,
+            IsPreviewingImage = _isPreviewing,
+            ChangeSource = ZoomChangeSource.Unknown,
+        });
+    }
+
+
+    /// <summary>
     /// Calculates zoom factor by the input zoom mode, and source size.
     /// </summary>
     public double CalculateZoomFactor(ZoomMode zoomMode, double srcWidth, double srcHeight)

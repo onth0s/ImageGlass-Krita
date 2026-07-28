@@ -437,6 +437,12 @@ public partial class MainWindowView : PhControl
             action = Config.DefaultMouseClickActions.GetValueOrDefault(e.ClickEvent);
         }
 
+        if (action?.Executable == nameof(API.IG_SetZoomForMouseClick))
+        {
+            AppAPIProvider.IG_SetZoomForMouseClick(e.Modifiers.HasFlag(KeyModifiers.Shift));
+            return;
+        }
+
         await Core.API!.RunActionAsync(action);
     }
 
