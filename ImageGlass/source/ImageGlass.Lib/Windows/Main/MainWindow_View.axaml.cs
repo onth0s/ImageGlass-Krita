@@ -439,7 +439,9 @@ public partial class MainWindowView : PhControl
 
         if (action?.Executable == nameof(API.IG_SetZoomForMouseClick))
         {
-            AppAPIProvider.IG_SetZoomForMouseClick(e.Modifiers.HasFlag(KeyModifiers.Shift));
+            var pos = (e.Event as TappedEventArgs)?.GetPosition(PART_Viewer)
+                ?? (e.Event as PointerEventArgs)?.GetPosition(PART_Viewer);
+            AppAPIProvider.IG_SetZoomForMouseClick(e.Modifiers.HasFlag(KeyModifiers.Shift), pos);
             return;
         }
 

@@ -865,10 +865,9 @@ public partial class ViewerControl
 
     /// <summary>
     /// Cycles zoom between actual image size (1.0 factor = 100%) and fit-to-window.
-    /// Centered by default on the vertical (Y) axis.
-    /// Keeps the horizontal (X) axis position unless centerBothAxes is true (e.g. Shift held).
+    /// Zooms using pivotPoint (or current mouse position) as anchor unless centerBothAxes is true (e.g. Shift held).
     /// </summary>
-    public void ToggleZoomActualSizeAndFit(bool centerBothAxes = false)
+    public void ToggleZoomActualSizeAndFit(bool centerBothAxes = false, Point? pivotPoint = null)
     {
         if (BitmapSize.IsEmpty || BitmapSize.Width <= 0 || BitmapSize.Height <= 0) return;
 
@@ -877,69 +876,86 @@ public partial class ViewerControl
 
         var fitFactor = CalculateZoomFactor(ZoomMode.ScaleToFit, BitmapSize.Width, BitmapSize.Height, controlW, controlH);
 
-        var targetFactor = Math.Abs(_zooming.Factor - 1.0) < 0.001 ? fitFactor : 1.0;
+        var currentEffectiveFactor = (SrcRect.Width > 0 && DestRect.Width > 0)
+            ? (DestRect.Width / SrcRect.Width) * Dpi
+            : _zooming.Factor;
+
+        var targetFactor = Math.Abs(currentEffectiveFactor - 1.0) < 0.001 ? fitFactor : 1.0;
         var isManualZoom = Math.Abs(targetFactor - fitFactor) > 0.001;
 
-        _zooming.OldFactor = _zooming.Factor;
+        _zooming.OldFactor = currentEffectiveFactor;
         _zooming.Factor = Math.Min(MaxZoom, Math.Max(targetFactor, MinZoom));
         _zooming.IsManual = isManualZoom;
-        _zooming.ZoomedPoint = default;
 
-        var zFactor = _zooming.Factor / Dpi;
-        var scaledW = BitmapSize.Width * zFactor;
-        var scaledH = BitmapSize.Height * zFactor;
+        var effectivePivot = pivotPoint ?? _zooming.ZoomedPoint;
+        var viewportRect = DrawingArea.Width > 0 && DrawingArea.Height > 0 ? DrawingArea : Bounds;
+        var hasValidPivot = !centerBothAxes && effectivePivot != default && (viewportRect.Contains(effectivePivot) || Bounds.Contains(effectivePivot));
 
-        var halfViewW = controlW / (2.0 * zFactor);
-        var halfViewH = controlH / (2.0 * zFactor);
-
-        // Y-axis: Centered by default
-        var logY = scaledH > controlH
-            ? 0.5 * BitmapSize.Height - halfViewH
-            : 0;
-
-        // X-axis: Centered if centerBothAxes is true (Shift held), otherwise keep current X position
-        double logX;
-        if (centerBothAxes)
+        if (hasValidPivot)
         {
-            logX = scaledW > controlW
-                ? 0.5 * BitmapSize.Width - halfViewW
-                : 0;
+            _zooming.ZoomedPoint = effectivePivot;
+            CalculateDrawingRegion();
+            _zooming.ZoomedPoint = default;
         }
         else
         {
-            var prevZFactor = _zooming.OldFactor / Dpi;
-            var prevScaledW = BitmapSize.Width * prevZFactor;
+            _zooming.ZoomedPoint = default;
 
-            if (scaledW > controlW)
+            var zFactor = _zooming.Factor / Dpi;
+            var scaledW = BitmapSize.Width * zFactor;
+            var scaledH = BitmapSize.Height * zFactor;
+
+            var halfViewW = controlW / (2.0 * zFactor);
+            var halfViewH = controlH / (2.0 * zFactor);
+
+            // Y-axis: Centered by default
+            var logY = scaledH > controlH
+                ? 0.5 * BitmapSize.Height - halfViewH
+                : 0;
+
+            // X-axis: Centered if centerBothAxes is true (Shift held), otherwise keep current X position
+            double logX;
+            if (centerBothAxes)
             {
-                if (prevScaledW > controlW)
-                {
-                    logX = _logicalSrcPoint.X;
-                }
-                else
-                {
-                    var normX = 0.5 + (_logicalSrcPoint.X / BitmapSize.Width);
-                    logX = normX * BitmapSize.Width - halfViewW;
-                }
+                logX = scaledW > controlW
+                    ? 0.5 * BitmapSize.Width - halfViewW
+                    : 0;
             }
             else
             {
-                if (prevScaledW > controlW)
+                var prevZFactor = _zooming.OldFactor / Dpi;
+                var prevScaledW = BitmapSize.Width * prevZFactor;
+
+                if (scaledW > controlW)
                 {
-                    var centerX = _logicalSrcPoint.X + (controlW / (2.0 * prevZFactor));
-                    var normX = centerX / BitmapSize.Width;
-                    logX = (normX - 0.5) * BitmapSize.Width;
+                    if (prevScaledW > controlW)
+                    {
+                        logX = _logicalSrcPoint.X;
+                    }
+                    else
+                    {
+                        var normX = 0.5 + (_logicalSrcPoint.X / BitmapSize.Width);
+                        logX = normX * BitmapSize.Width - halfViewW;
+                    }
                 }
                 else
                 {
-                    logX = _logicalSrcPoint.X;
+                    if (prevScaledW > controlW)
+                    {
+                        var centerX = _logicalSrcPoint.X + (controlW / (2.0 * prevZFactor));
+                        var normX = centerX / BitmapSize.Width;
+                        logX = (normX - 0.5) * BitmapSize.Width;
+                    }
+                    else
+                    {
+                        logX = _logicalSrcPoint.X;
+                    }
                 }
             }
+
+            _logicalSrcPoint = new Point(logX, logY);
+            CalculateDrawingRegion();
         }
-
-        _logicalSrcPoint = new Point(logX, logY);
-
-        CalculateDrawingRegion();
         CaptureSharedZoomState();
         InvalidateVisual();
 

@@ -1207,16 +1207,13 @@ public partial class AppAPIProvider
     /// Centered by default on the vertical (Y) axis, keeping horizontal (X) axis position
     /// unless centerBothAxes is true (e.g. Shift key held).
     /// </summary>
-    public static void IG_SetZoomForMouseClick() => IG_SetZoomForMouseClick(false);
+    public static void IG_SetZoomForMouseClick() => IG_SetZoomForMouseClick(false, null);
 
-    /// <summary>
-    /// Cycles zoom between actual image size (100%) and fit-to-window.
-    /// Centered by default on the vertical (Y) axis, keeping horizontal (X) axis position
-    /// unless centerBothAxes is true (e.g. Shift key held).
-    /// </summary>
-    public static void IG_SetZoomForMouseClick(bool centerBothAxes)
+    public static void IG_SetZoomForMouseClick(bool centerBothAxes) => IG_SetZoomForMouseClick(centerBothAxes, null);
+
+    public static void IG_SetZoomForMouseClick(bool centerBothAxes, Point? pivotPoint)
     {
-        Viewer.ToggleZoomActualSizeAndFit(centerBothAxes);
+        Viewer.ToggleZoomActualSizeAndFit(centerBothAxes, pivotPoint);
     }
 
 
