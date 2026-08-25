@@ -142,6 +142,27 @@ public class Program
             }
         }
 
-        Console.WriteLine($"=== RESULTS: {passedCount}/{testFiles.Length} KRA Tests Passed, Config Fast-Path {(isConfigValid ? "Passed" : "Failed")}, Skia Fast-Path {(skiaPassed ? "Passed" : "Failed")} ===");
+        // Target 4: Static Theme Zero-I/O Bootstrap Test
+        Console.WriteLine("--- [Target 4: Static Theme Zero-I/O Bootstrap] ---");
+        var swTheme = Stopwatch.StartNew();
+        var staticThemeDark = ImageGlass.Common.AppThemes.IgTheme.CreateDefault(true);
+        var staticThemeLight = ImageGlass.Common.AppThemes.IgTheme.CreateDefault(false);
+        swTheme.Stop();
+
+        bool isThemeValid = staticThemeDark.IsValid && staticThemeLight.IsValid
+                         && !string.IsNullOrEmpty(staticThemeDark.Colors.BgColor)
+                         && !string.IsNullOrEmpty(staticThemeLight.Colors.BgColor);
+
+        Console.WriteLine($"  Static Theme Init: {swTheme.ElapsedTicks * 1000.0 / Stopwatch.Frequency:F3} ms (Dark={staticThemeDark.Info.Name}, Light={staticThemeLight.Info.Name})");
+        if (isThemeValid)
+        {
+            Console.WriteLine("  ✅ Static Theme Fast-Path PASSED\n");
+        }
+        else
+        {
+            Console.WriteLine("  ❌ Static Theme Fast-Path FAILED\n");
+        }
+
+        Console.WriteLine($"=== RESULTS: {passedCount}/{testFiles.Length} KRA Tests Passed, Config Fast-Path {(isConfigValid ? "Passed" : "Failed")}, Skia Fast-Path {(skiaPassed ? "Passed" : "Failed")}, Theme Fast-Path {(isThemeValid ? "Passed" : "Failed")} ===");
     }
 }

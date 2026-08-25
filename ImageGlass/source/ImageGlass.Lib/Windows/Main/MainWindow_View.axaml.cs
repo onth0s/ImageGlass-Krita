@@ -78,20 +78,21 @@ public partial class MainWindowView : PhControl
         PART_Viewer.ViewerMouseWheel += PART_Viewer_ViewerMouseWheel;
         PART_Viewer.ContextMenu?.Opened += PART_Viewer_ContextMenu_Opened;
 
-        // hook viewer events for external tool broadcasting
-        PART_Viewer.PhotoLoading += Core.Viewer_PhotoLoadingForPlugins;
-        PART_Viewer.ViewerPointerMoved += Core.Viewer_PointerMovedForPlugins;
-        PART_Viewer.ViewerPointerPressed += Core.Viewer_PointerPressedForPlugins;
-        PART_Viewer.SelectionChanged += Core.Viewer_SelectionChangedForPlugins;
-        PART_Viewer.PhotoFrameChanged += Core.Viewer_FrameChangedForPlugins;
-
-
-        // load image from command line arguments
+        // load image from command line arguments immediately
         LoadImagesFromCmdArgs();
 
-        // start diagnostic pipe server if --diag flag is present
-        PART_Viewer.StartDiagServer();
-        PART_Viewer.DiagNavigateRequested += PART_Viewer_DiagNavigate;
+        // start diagnostic pipe server & plugin broadcasting in background
+        Dispatcher.UIThread.Post(() =>
+        {
+            PART_Viewer.PhotoLoading += Core.Viewer_PhotoLoadingForPlugins;
+            PART_Viewer.ViewerPointerMoved += Core.Viewer_PointerMovedForPlugins;
+            PART_Viewer.ViewerPointerPressed += Core.Viewer_PointerPressedForPlugins;
+            PART_Viewer.SelectionChanged += Core.Viewer_SelectionChangedForPlugins;
+            PART_Viewer.PhotoFrameChanged += Core.Viewer_FrameChangedForPlugins;
+
+            PART_Viewer.StartDiagServer();
+            PART_Viewer.DiagNavigateRequested += PART_Viewer_DiagNavigate;
+        }, DispatcherPriority.Background);
 
         StartupTrace.Mark("MainView:loaded");
         StartupTrace.Flush();

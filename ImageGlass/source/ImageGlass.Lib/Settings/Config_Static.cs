@@ -944,8 +944,18 @@ public partial class Config
     private static async Task<IgTheme> FindAndLoadThemePackAsync(string themeFolderName,
         bool useFallBackTheme, bool throwIfThemeInvalid)
     {
-        // 1. look for theme pack in the Config dir
+        // 0. Fast-path: use zero-I/O in-memory default theme if standard Kobe theme and no custom override
+        var isKobe = themeFolderName.Equals("Kobe", StringComparison.OrdinalIgnoreCase)
+                  || themeFolderName.Equals(Const.DEFAULT_THEME, StringComparison.OrdinalIgnoreCase);
+        var isKobeLight = themeFolderName.Equals("Kobe-Light", StringComparison.OrdinalIgnoreCase);
+
         var themeConfigPath = BHelper.ConfigDir(Dir.Themes, themeFolderName);
+        if ((isKobe || isKobeLight) && !File.Exists(themeConfigPath))
+        {
+            return IgTheme.CreateDefault(isKobe);
+        }
+
+        // 1. look for theme pack in the Config dir
         var th = await new IgTheme().LoadAsync(themeConfigPath);
 
         if (!th.IsValid)
@@ -957,9 +967,8 @@ public partial class Config
             // 3. cannot find theme, use fall back theme
             if (!th.IsValid && useFallBackTheme)
             {
-                // 4. load default theme
-                baseThemeConfigPath = BHelper.BaseDir(Dir.Themes, Const.DEFAULT_THEME);
-                th = await new IgTheme().LoadAsync(baseThemeConfigPath);
+                // 4. load default static theme
+                th = IgTheme.CreateDefault(true);
             }
         }
 

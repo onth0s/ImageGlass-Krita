@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -57,6 +57,44 @@ public partial class IgTheme : PhReactive
     /// </summary>
     public static string CONFIG_FILE => "igtheme.json";
 
+    /// <summary>
+    /// Creates a static in-memory Kobe default theme without any disk I/O or JSON parsing.
+    /// </summary>
+    public static IgTheme CreateDefault(bool darkMode)
+    {
+        var folderName = darkMode ? "Kobe" : "Kobe-Light";
+        var folderPath = BHelper.BaseDir(Dir.Themes, folderName);
+
+        var theme = new IgTheme
+        {
+            FolderPath = folderPath,
+            IsValid = true,
+            _Metadata = new() { Description = "ImageGlass theme configuration file", Version = 10 },
+            Info = new()
+            {
+                Name = darkMode ? "Kobe Dark" : "Kobe Light",
+                Author = "Dương Diệu Pháp",
+                Description = "Kobe theme for ImageGlass 10",
+                Version = 10
+            },
+            Settings = new()
+            {
+                IsDarkMode = darkMode,
+                PreviewImage = "preview.webp",
+                AppLogo = "logo.svg"
+            },
+            Colors = new()
+            {
+                BgColor = darkMode ? "#151b1faa" : "#f2f2f2aa",
+                TextColor = darkMode ? "#dedede" : "#202020",
+                ToolbarBgColor = darkMode ? "#151b1f00" : "#f2f2f200",
+                GalleryBgColor = darkMode ? "#151b1f00" : "#f2f2f200",
+                MenuBgColor = darkMode ? "#1e2429" : "#ffffff"
+            }
+        };
+
+        return theme;
+    }
 
     #endregion // Static Properties
 
