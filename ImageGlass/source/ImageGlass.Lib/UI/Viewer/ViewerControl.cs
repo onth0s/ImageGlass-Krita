@@ -631,25 +631,36 @@ public partial class ViewerControl : PhControl
         PhotoTrace.Mark("viewer:set-photo", inputPhoto?.FilePath,
             $"cache={options?.UseCache ?? true}, state={inputPhoto?.State}, shouldLoadFull={ShouldLoadFullResolution}");
 
+        var oldPhoto = Photo;
+
         lock (_lock)
         {
-            // save pan position for LockZoom before unloading
+            // save pan position for LockZoom before switching
             _lockZoomSavedSrcPoint = ZoomMode == ZoomMode.LockZoom ? _logicalSrcPoint : null;
-
-            // unload current photo resources
-            UnloadPhoto();
 
             if (inputPhoto is null)
             {
+                UnloadPhoto();
                 Photo = null;
                 Refresh(true);
                 return;
             }
 
+            CancelPreview();
+            StopAnimator();
+            _isPreviewing.SetFalse();
             SourceKind = PhotoSource.Native;
+            oldPhoto?.CancelLoading();
+
             _loadingOptions = options ?? new();
             _enablePanningVelocity = true;
             Photo = inputPhoto;
+
+            if (_loadingOptions.ResetZoom && ZoomMode != ZoomMode.LockZoom && !Core.Config.EnableSharedZoom)
+            {
+                _zooming.IsManual = false;
+                _logicalSrcPoint = new Point(0, 0);
+            }
         }
 
 
@@ -777,6 +788,7 @@ public partial class ViewerControl : PhControl
             {
                 // set preview source
                 SKImageRef.Set(ref _imgSource, imgPreview);
+                SKImageRef.Set(ref _imgRender, null);
 
                 var desiredSrcZoomFactor = CalculateZoomFactor(ZoomMode, e.Metadata.Width, e.Metadata.Height);
                 var previewZoomFactor = desiredSrcZoomFactor;
@@ -830,8 +842,8 @@ public partial class ViewerControl : PhControl
         if (!ShouldLoadFullResolution) return;
 
 
-        // 1. back up size of preview image
-        var prevSize = BitmapSize;
+        // 1. back up size of preview image (only when transitioning from preview to loaded for the same photo)
+        var prevSize = _isPreviewing ? BitmapSize : new Size(0, 0);
 
         // source
         SKImage? imgFrame = null;
