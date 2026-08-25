@@ -214,27 +214,21 @@ public static partial class SkiaCodec
 
         // 2. read single-frame formats
         using var bmpFrame = new SKBitmap(codec.Info);
-        var frameIndex = Math.Min(0, options.FrameIndex);
+        var frameIndex = Math.Clamp(options.FrameIndex, 0, Math.Max(0, codec.FrameCount - 1));
         var codecOption = new SKCodecOptions(frameIndex);
 
         if (codec.GetPixels(codec.Info, bmpFrame.GetPixels(), codecOption) == SKCodecResult.Success)
         {
             // 2.1 correct rotation
-            if (options.CorrectRotation)
+            if (options.CorrectRotation && TryApplyOrientation(bmpFrame, codec.EncodedOrigin, out var bmpOriented))
             {
-                if (TryApplyOrientation(bmpFrame, codec.EncodedOrigin, out var bmpOriented))
+                using (bmpOriented)
                 {
                     if (bmpOriented is not null)
                     {
                         result.Size = new Size(bmpOriented.Width, bmpOriented.Height);
                         result.SingleFrame = ToSKImage(bmpOriented);
-                        bmpFrame.Dispose();
                     }
-                }
-
-                if (bmpOriented is null)
-                {
-                    result.SingleFrame = ToSKImage(bmpFrame);
                 }
             }
             else
@@ -295,14 +289,14 @@ public static partial class SkiaCodec
         };
 
         using var bmpFrame = new SKBitmap(codec.Info);
-        var frameIndex = Math.Min(0, options.FrameIndex);
+        var frameIndex = Math.Clamp(options.FrameIndex, 0, Math.Max(0, codec.FrameCount - 1));
         var codecOption = new SKCodecOptions(frameIndex);
 
         if (codec.GetPixels(codec.Info, bmpFrame.GetPixels(), codecOption) == SKCodecResult.Success)
         {
-            if (options.CorrectRotation)
+            if (options.CorrectRotation && TryApplyOrientation(bmpFrame, codec.EncodedOrigin, out var bmpOriented))
             {
-                if (TryApplyOrientation(bmpFrame, codec.EncodedOrigin, out var bmpOriented))
+                using (bmpOriented)
                 {
                     if (bmpOriented is not null)
                     {
@@ -310,13 +304,7 @@ public static partial class SkiaCodec
                         meta.Width = (uint)bmpOriented.Width;
                         meta.Height = (uint)bmpOriented.Height;
                         result.SingleFrame = ToSKImage(bmpOriented);
-                        bmpFrame.Dispose();
                     }
-                }
-
-                if (bmpOriented is null)
-                {
-                    result.SingleFrame = ToSKImage(bmpFrame);
                 }
             }
             else

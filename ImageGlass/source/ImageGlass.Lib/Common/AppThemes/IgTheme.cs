@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 using Avalonia.Media;
 using ImageGlass.Common.Types;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -57,6 +58,47 @@ public partial class IgTheme : PhReactive
     /// </summary>
     public static string CONFIG_FILE => "igtheme.json";
 
+    private static readonly Dictionary<string, string> _defaultToolbarIcons = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ActualSize"] = "ActualSize.svg",
+        ["AutoZoom"] = "AutoZoom.svg",
+        ["Checkerboard"] = "Checkerboard.svg",
+        ["ColorPicker"] = "ColorPicker.svg",
+        ["Crop"] = "Crop.svg",
+        ["Delete"] = "Delete.svg",
+        ["Edit"] = "Edit.svg",
+        ["FlipHorz"] = "FlipHorz.svg",
+        ["FlipVert"] = "FlipVert.svg",
+        ["FullScreen"] = "FullScreen.svg",
+        ["GoToImage"] = "GoToImage.svg",
+        ["LockZoom"] = "LockZoom.svg",
+        ["MainMenu"] = "MainMenu.svg",
+        ["OpenFile"] = "OpenFile.svg",
+        ["Print"] = "Print.svg",
+        ["Refresh"] = "Refresh.svg",
+        ["RotateLeft"] = "RotateLeft.svg",
+        ["RotateRight"] = "RotateRight.svg",
+        ["Save"] = "Save.svg",
+        ["ScaleToFill"] = "ScaleToFill.svg",
+        ["ScaleToFit"] = "ScaleToFit.svg",
+        ["ScaleToHeight"] = "ScaleToHeight.svg",
+        ["ScaleToWidth"] = "ScaleToWidth.svg",
+        ["Slideshow"] = "Slideshow.svg",
+        ["Gallery"] = "Gallery.svg",
+        ["ViewFirstImage"] = "ViewFirstImage.svg",
+        ["ViewLastImage"] = "ViewLastImage.svg",
+        ["ViewNextImage"] = "ViewNextImage.svg",
+        ["ViewPreviousImage"] = "ViewPreviousImage.svg",
+        ["WindowFit"] = "WindowFit.svg",
+        ["ZoomIn"] = "ZoomIn.svg",
+        ["ZoomOut"] = "ZoomOut.svg",
+        ["Play"] = "Play.svg",
+        ["Pause"] = "Pause.svg",
+        ["Export"] = "Export.svg",
+        ["Exit"] = "Exit.svg",
+        ["SharedZoom"] = "SharedZoom.svg"
+    };
+
     /// <summary>
     /// Creates a static in-memory Kobe default theme without any disk I/O or JSON parsing.
     /// </summary>
@@ -90,7 +132,8 @@ public partial class IgTheme : PhReactive
                 ToolbarBgColor = darkMode ? "#151b1f00" : "#f2f2f200",
                 GalleryBgColor = darkMode ? "#151b1f00" : "#f2f2f200",
                 MenuBgColor = darkMode ? "#1e2429" : "#ffffff"
-            }
+            },
+            ToolbarIcons = new Dictionary<string, string>(_defaultToolbarIcons, StringComparer.OrdinalIgnoreCase)
         };
 
         return theme;

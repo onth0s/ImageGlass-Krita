@@ -26,7 +26,7 @@ namespace ImageGlass.Common.Photoing;
 /// <summary>
 /// Provides Krita (.kra) metadata loading and decoding by extracting the embedded preview PNG.
 /// </summary>
-public sealed class KritaCodecAdapter : PhDisposable, ICodec
+public sealed class KritaCodecAdapter : PhDisposable, ICodec, ISinglePassDecoder
 {
     private static readonly string[] _supportedExtensions = [".kra"];
 
@@ -77,5 +77,19 @@ public sealed class KritaCodecAdapter : PhDisposable, ICodec
         using var output = await Task.Run(() => KritaCodec.Load(metadata, options), cancellationToken).ConfigureAwait(false);
 
         return CodecDecodeResultFactory.FromSkiaOutput(CodecId, output, metadata);
+    }
+
+    /// <inheritdoc/>
+    public bool CanDecodeFast(string filePath)
+    {
+        return KritaCodec.IsKraFile(filePath);
+    }
+
+    /// <inheritdoc/>
+    public (PhotoMetadata Meta, CodecDecodeResult Output) DecodeFast(string filePath, PhotoReadOptions options)
+    {
+        var (meta, output) = KritaCodec.DecodeFast(filePath, options);
+        var result = CodecDecodeResultFactory.FromSkiaOutput(CodecId, output, meta);
+        return (meta, result);
     }
 }

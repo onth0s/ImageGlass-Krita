@@ -155,6 +155,27 @@ public sealed class CodecRegistry : PhDisposable
 
 
     /// <summary>
+    /// Selects the first registered codec that supports fast single-pass decode for the specified file.
+    /// </summary>
+    public ISinglePassDecoder? SelectFastDecoder(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return null;
+
+        lock (_lock)
+        {
+            foreach (var codec in _decodeCodecs)
+            {
+                if (codec is ISinglePassDecoder fastDecoder && fastDecoder.CanDecodeFast(filePath))
+                {
+                    return fastDecoder;
+                }
+            }
+            return null;
+        }
+    }
+
+
+    /// <summary>
     /// Clears the per-extension codec-selection caches so the next lookup re-scans by
     /// priority. Call when selection context changes (e.g. color-profile support toggles),
     /// else a codec chosen while a higher-priority one was ineligible stays stuck.

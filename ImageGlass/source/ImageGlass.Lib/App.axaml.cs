@@ -121,6 +121,10 @@ public partial class App : Application
             CreateMainWindowIfNotExist();
             StartupTrace.Mark("MainWindow:ctor:end");
 
+            // wait for UI settings and theme ready
+            await _taskUi.Task;
+            StartupTrace.Mark("Theme:ready");
+
             desktop.MainWindow = MainWindow;
 
             // if user settings failed to load, report it first

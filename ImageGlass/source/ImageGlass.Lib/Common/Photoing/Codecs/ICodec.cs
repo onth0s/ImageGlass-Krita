@@ -81,3 +81,19 @@ public interface ICodec : IDisposable
         CodecSelectionContext context,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Provides an optional fast single-pass decoding contract for codecs.
+/// </summary>
+public interface ISinglePassDecoder
+{
+    /// <summary>
+    /// Returns <c>true</c> if the specified file path can be decoded in a single fast pass.
+    /// </summary>
+    bool CanDecodeFast(string filePath);
+
+    /// <summary>
+    /// Decodes both metadata and image in a single pass.
+    /// </summary>
+    (PhotoMetadata Meta, CodecDecodeResult Output) DecodeFast(string filePath, PhotoReadOptions options);
+}

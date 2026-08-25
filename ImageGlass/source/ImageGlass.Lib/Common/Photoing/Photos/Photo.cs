@@ -307,48 +307,27 @@ public partial class Photo : PhDisposable
     /// <inheritdoc/>
     /// Calling this function also disposes Metadata object.
     /// </summary>
-    protected override async void OnDisposing()
+    protected override void OnDisposing()
     {
         base.OnDisposing();
 
-        await OnDisposing(true);
-    }
-
-
-    /// <summary>
-    /// Handles the disposal of resources when an object is being disposed.
-    /// </summary>
-    /// <param name="disposeEverything">
-    /// Option to dispose everything or only the Bitmap object.
-    /// </param>
-    private async Task OnDisposing(bool disposeEverything)
-    {
         CancelLoading();
         UnloadBitmap();
 
-        // dispose everything
-        if (disposeEverything)
+        Metadata.Dispose();
+        Metadata = new();
+
+        _cancelPhotoLoading?.Dispose();
+        _cancelPhotoLoading = null;
+
+        _ = Task.Run(async () =>
         {
-            await UnloadThumbnailAsync().ConfigureAwait(false);
-
-            // Do NOT dispose _thumbnailLock: a concurrent LoadThumbnailAsync may
-            // still be parked on its WaitAsync (e.g. behind the throttle lock), and
-            // disposing it makes that await throw ObjectDisposedException on a
-            // background task — surfacing as an unobserved-exception crash. We only
-            // use WaitAsync/Release (never AvailableWaitHandle), so the SemaphoreSlim
-            // holds no unmanaged handle and is reclaimed safely by the GC.
-
-            if (_taskMetadata is not null)
+            try
             {
-                await _taskMetadata;
+                await UnloadThumbnailAsync().ConfigureAwait(false);
             }
-
-            Metadata.Dispose();
-            Metadata = new();
-
-            _cancelPhotoLoading?.Dispose();
-            _cancelPhotoLoading = null;
-        }
+            catch { }
+        });
     }
 
 
@@ -502,22 +481,16 @@ public partial class Photo : PhDisposable
 
     /// <summary>
     /// Disposes the Bitmap and resets the relevant data.
-    /// This method keeps the Metadata and neccessary resources.
+    /// This method keeps the Metadata and necessary resources.
     /// </summary>
-    public async void Unload()
+    public void Unload()
     {
-        // wait for all pending tasks are done
-        while (!_taskRefs.IsEmpty)
-        {
-            await Task.Delay(10);
-        }
-
         // reset info
         State = PhotoState.None;
         Error = null;
 
-        // unload image
-        await OnDisposing(false);
+        CancelLoading();
+        UnloadBitmap();
     }
 
 
@@ -580,53 +553,27 @@ public partial class Photo : PhDisposable
             Error = null;
 
 
-            // Unified single-pass decode for Krita (.kra) files
-            if (KritaCodec.IsKraFile(FilePath))
+            // Unified single-pass fast decode via registered codec
+            var fastDecoder = Core.CodecRegistry.SelectFastDecoder(FilePath);
+            if (fastDecoder is not null)
             {
-                Error = await Task.Factory.StartNew(() =>
+                Error = await Task.Run(() =>
                 {
                     try
                     {
-                        var (meta, output) = KritaCodec.DecodeFast(FilePath, ReadOptions);
+                        var (meta, output) = fastDecoder.DecodeFast(FilePath, ReadOptions);
                         Metadata.Dispose();
                         Metadata = meta;
-                        _width = (uint)output.Size.Width;
-                        _height = (uint)output.Size.Height;
-                        Bitmap = output.SingleFrame;
-                        CodecId = "krita.skia";
+                        ApplyDecodeResult(output);
                         return null;
                     }
                     catch (Exception ex)
                     {
                         return ex;
                     }
-                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                }, token);
 
-                PhotoTrace.Mark("decode:single-pass", FilePath, $"kra={_width}x{_height}");
-            }
-            // Unified single-pass decode for standard raster files (.png, .jpg, .webp, .bmp, etc.)
-            else if (SkiaCodec.IsFastRasterFormat(FilePath))
-            {
-                Error = await Task.Factory.StartNew(() =>
-                {
-                    try
-                    {
-                        var (meta, output) = SkiaCodec.DecodeFast(FilePath, ReadOptions);
-                        Metadata.Dispose();
-                        Metadata = meta;
-                        _width = (uint)output.Size.Width;
-                        _height = (uint)output.Size.Height;
-                        Bitmap = output.SingleFrame;
-                        CodecId = "skia";
-                        return null;
-                    }
-                    catch (Exception ex)
-                    {
-                        return ex;
-                    }
-                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
-                PhotoTrace.Mark("decode:single-pass", FilePath, $"skia={_width}x{_height}");
+                PhotoTrace.Mark("decode:single-pass", FilePath, $"{CodecId}={_width}x{_height}");
             }
             else
             {

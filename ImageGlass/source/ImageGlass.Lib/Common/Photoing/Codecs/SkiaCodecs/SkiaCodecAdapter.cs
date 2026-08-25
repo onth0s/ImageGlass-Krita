@@ -27,7 +27,7 @@ namespace ImageGlass.Common.Photoing;
 /// <summary>
 /// Provides native Skia-based raster metadata loading and decoding.
 /// </summary>
-public sealed class SkiaCodecAdapter : PhDisposable, ICodec
+public sealed class SkiaCodecAdapter : PhDisposable, ICodec, ISinglePassDecoder
 {
     /// <summary>
     /// Built-in extensions handled by the Skia codec. Plugins can override
@@ -111,5 +111,19 @@ public sealed class SkiaCodecAdapter : PhDisposable, ICodec
         using var output = await SkiaCodec.LoadAsync(metadata, options, cancellationToken).ConfigureAwait(false);
 
         return CodecDecodeResultFactory.FromSkiaOutput(CodecId, output, metadata);
+    }
+
+    /// <inheritdoc/>
+    public bool CanDecodeFast(string filePath)
+    {
+        return SkiaCodec.IsFastRasterFormat(filePath);
+    }
+
+    /// <inheritdoc/>
+    public (PhotoMetadata Meta, CodecDecodeResult Output) DecodeFast(string filePath, PhotoReadOptions options)
+    {
+        var (meta, output) = SkiaCodec.DecodeFast(filePath, options);
+        var result = CodecDecodeResultFactory.FromSkiaOutput(CodecId, output, meta);
+        return (meta, result);
     }
 }
