@@ -281,6 +281,8 @@ public static partial class SkiaCodec
             Height = (uint)codec.Info.Height,
             HasAlpha = !codec.Info.IsOpaque,
             SkiaColorSpace = codec.Info.ColorSpace,
+            BitsPerChannel = GetBitsPerChannel(codec.Info.ColorType),
+            ColorSpace = codec.Info.ColorSpace?.IsSrgb == true ? ImageMagick.ColorSpace.sRGB : ImageMagick.ColorSpace.Undefined,
         };
 
         var result = new SkiaDecoderOutput
@@ -288,11 +290,29 @@ public static partial class SkiaCodec
             Size = new Size(codec.Info.Width, codec.Info.Height)
         };
 
+        // 1. Multi-frame / animated formats
+        if (codec.FrameCount > 1)
+        {
+            var skiaFramesInfo = GetFramesMetadata(filePath);
+            meta.CanAnimate = skiaFramesInfo?.Count > 0;
+            meta.Frames = skiaFramesInfo?.Select(aniInfo => new FrameMetadata
+            {
+                Animation = aniInfo,
+            }).ToImmutableList() ?? [];
+
+            var frames = meta.Frames.Select(f => (SKCodecFrameInfo)f.Animation!).ToArray();
+            var persistentCodec = SKCodec.Create(filePath);
+            result.Animator = new SkiaAnimator(persistentCodec, frames);
+            return (meta, result);
+        }
+
+        // 2. Single-frame raster formats
         using var bmpFrame = new SKBitmap(codec.Info);
         var frameIndex = Math.Clamp(options.FrameIndex, 0, Math.Max(0, codec.FrameCount - 1));
         var codecOption = new SKCodecOptions(frameIndex);
 
-        if (codec.GetPixels(codec.Info, bmpFrame.GetPixels(), codecOption) == SKCodecResult.Success)
+        var getPixelsResult = codec.GetPixels(codec.Info, bmpFrame.GetPixels(), codecOption);
+        if (getPixelsResult is SKCodecResult.Success or SKCodecResult.IncompleteInput)
         {
             if (options.CorrectRotation && TryApplyOrientation(bmpFrame, codec.EncodedOrigin, out var bmpOriented))
             {

@@ -646,7 +646,6 @@ public partial class ViewerControl : PhControl
                 return;
             }
 
-
             SourceKind = PhotoSource.Native;
             _loadingOptions = options ?? new();
             _enablePanningVelocity = true;
@@ -895,8 +894,8 @@ public partial class ViewerControl : PhControl
                         PhotoTrace.Mark("viewer:color-managed", e.Photo.FilePath,
                             $"applied (hdrToneMap={Core.Config.EnableHdrToneMapping && e.Photo.Metadata.IsHdr}, srcProfile={(string.IsNullOrEmpty(e.Photo.Metadata.ColorProfileName) ? "none" : e.Photo.Metadata.ColorProfileName)})");
 
-                        // don't dispose the clipboard photo
-                        if (!e.Photo.IsClipboard)
+                        // don't dispose the clipboard photo or cached photo bitmap
+                        if (!e.Photo.IsClipboard && !ReferenceEquals(imgFrame, e.Photo.Bitmap))
                         {
                             imgFrame?.Dispose();
                         }
@@ -942,6 +941,7 @@ public partial class ViewerControl : PhControl
                     {
                         _isFirstDraw.SetTrue();
                         SKImageRef.Set(ref _imgSource, imgFrame);
+                        SKImageRef.Set(ref _imgRender, null);
                     }
 
 

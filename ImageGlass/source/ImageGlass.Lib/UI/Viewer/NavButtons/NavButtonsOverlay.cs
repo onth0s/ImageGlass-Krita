@@ -136,6 +136,7 @@ public class NavButtonsOverlay : PhControl
             _state.IsLeftPressed = true;
             UpdateAnimationTargets();
             InvalidateVisual();
+            e.Handled = true;
         }
         else if (GetRightHitArea().Contains(pos))
         {
@@ -144,9 +145,8 @@ public class NavButtonsOverlay : PhControl
             _state.IsRightPressed = true;
             UpdateAnimationTargets();
             InvalidateVisual();
+            e.Handled = true;
         }
-
-        // Don't set e.Handled — let the event bubble to parent ViewerControl
     }
 
 
@@ -200,23 +200,32 @@ public class NavButtonsOverlay : PhControl
             return;
 
         var pos = e.GetPosition(this);
+        var hitLeft = GetLeftHitArea().Contains(pos);
+        var hitRight = GetRightHitArea().Contains(pos);
 
         // click detection
         if (!wasDragging)
         {
-            if (wasLeftPressed && GetLeftHitArea().Contains(pos))
+            if (wasLeftPressed && hitLeft)
             {
                 _parentViewer.OnNavButtonClicked(NavButtonDirection.Left);
+                e.Handled = true;
             }
-            else if (wasRightPressed && GetRightHitArea().Contains(pos))
+            else if (wasRightPressed && hitRight)
             {
                 _parentViewer.OnNavButtonClicked(NavButtonDirection.Right);
+                e.Handled = true;
             }
         }
 
+        if (wasLeftPressed || wasRightPressed || hitLeft || hitRight)
+        {
+            e.Handled = true;
+        }
+
         // update hover
-        _state.IsLeftHovered = GetLeftHitArea().Contains(pos);
-        _state.IsRightHovered = GetRightHitArea().Contains(pos);
+        _state.IsLeftHovered = hitLeft;
+        _state.IsRightHovered = hitRight;
         UpdateAnimationTargets();
         InvalidateVisual();
     }
