@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -247,6 +247,85 @@ public static partial class SkiaCodec
         codec = null;
 
         return result;
+    }
+
+
+    private static readonly HashSet<string> _fastRasterExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".bmp", ".dib", ".ico"
+    };
+
+    /// <summary>
+    /// Checks if a file path belongs to a common raster format that supports fast single-pass decoding.
+    /// </summary>
+    public static bool IsFastRasterFormat(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return false;
+        var ext = Path.GetExtension(filePath);
+        return _fastRasterExtensions.Contains(ext);
+    }
+
+    /// <summary>
+    /// Unified single-pass decode for standard Skia raster formats: reads file once, constructs PhotoMetadata and decodes SKImage in a single pass.
+    /// </summary>
+    public static (PhotoMetadata Meta, SkiaDecoderOutput Output) DecodeFast(string filePath, PhotoReadOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            throw new FileNotFoundException("File not found", filePath);
+
+        using var codec = SKCodec.Create(filePath);
+        if (codec is null || codec.IsDisposed())
+            throw new InvalidDataException($"Failed to create Skia codec for: {filePath}");
+
+        var meta = new PhotoMetadata(filePath)
+        {
+            IsVector = false,
+            FrameCount = (uint)Math.Max(1, codec.FrameCount),
+            OriginalWidth = (uint)codec.Info.Width,
+            Width = (uint)codec.Info.Width,
+            OriginalHeight = (uint)codec.Info.Height,
+            Height = (uint)codec.Info.Height,
+            HasAlpha = !codec.Info.IsOpaque,
+            SkiaColorSpace = codec.Info.ColorSpace,
+        };
+
+        var result = new SkiaDecoderOutput
+        {
+            Size = new Size(codec.Info.Width, codec.Info.Height)
+        };
+
+        using var bmpFrame = new SKBitmap(codec.Info);
+        var frameIndex = Math.Min(0, options.FrameIndex);
+        var codecOption = new SKCodecOptions(frameIndex);
+
+        if (codec.GetPixels(codec.Info, bmpFrame.GetPixels(), codecOption) == SKCodecResult.Success)
+        {
+            if (options.CorrectRotation)
+            {
+                if (TryApplyOrientation(bmpFrame, codec.EncodedOrigin, out var bmpOriented))
+                {
+                    if (bmpOriented is not null)
+                    {
+                        result.Size = new Size(bmpOriented.Width, bmpOriented.Height);
+                        meta.Width = (uint)bmpOriented.Width;
+                        meta.Height = (uint)bmpOriented.Height;
+                        result.SingleFrame = ToSKImage(bmpOriented);
+                        bmpFrame.Dispose();
+                    }
+                }
+
+                if (bmpOriented is null)
+                {
+                    result.SingleFrame = ToSKImage(bmpFrame);
+                }
+            }
+            else
+            {
+                result.SingleFrame = ToSKImage(bmpFrame);
+            }
+        }
+
+        return (meta, result);
     }
 
 

@@ -22,6 +22,7 @@ using SkiaSharp;
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.IO.MemoryMappedFiles;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -62,8 +63,9 @@ public static class KritaCodec
 
         try
         {
-            using var fileStream = File.OpenRead(filePath);
-            using var archive = new ZipArchive(fileStream, ZipArchiveMode.Read, leaveOpen: false);
+            using var mmf = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
+            using var vaStream = mmf.CreateViewStream(0, 0, MemoryMappedFileAccess.Read);
+            using var archive = new ZipArchive(vaStream, ZipArchiveMode.Read, leaveOpen: false);
 
             // Prefer full-resolution composite canvas; fall back to thumbnail preview
             var entry = archive.GetEntry("mergedimage.png")
@@ -71,7 +73,8 @@ public static class KritaCodec
 
             if (entry is null) return null;
 
-            var ms = new MemoryStream();
+            var capacity = entry.Length > 0 ? (int)entry.Length : 65536;
+            var ms = new MemoryStream(capacity);
             using (var entryStream = entry.Open())
             {
                 entryStream.CopyTo(ms);

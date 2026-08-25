@@ -604,6 +604,30 @@ public partial class Photo : PhDisposable
 
                 PhotoTrace.Mark("decode:single-pass", FilePath, $"kra={_width}x{_height}");
             }
+            // Unified single-pass decode for standard raster files (.png, .jpg, .webp, .bmp, etc.)
+            else if (SkiaCodec.IsFastRasterFormat(FilePath))
+            {
+                Error = await Task.Factory.StartNew(() =>
+                {
+                    try
+                    {
+                        var (meta, output) = SkiaCodec.DecodeFast(FilePath, ReadOptions);
+                        Metadata.Dispose();
+                        Metadata = meta;
+                        _width = (uint)output.Size.Width;
+                        _height = (uint)output.Size.Height;
+                        Bitmap = output.SingleFrame;
+                        CodecId = "skia";
+                        return null;
+                    }
+                    catch (Exception ex)
+                    {
+                        return ex;
+                    }
+                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                PhotoTrace.Mark("decode:single-pass", FilePath, $"skia={_width}x{_height}");
+            }
             else
             {
                 // 1. load metadata ===================

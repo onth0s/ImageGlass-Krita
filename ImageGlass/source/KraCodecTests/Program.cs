@@ -113,6 +113,35 @@ public class Program
             Console.WriteLine("  ❌ Config Fast-Path FAILED\n");
         }
 
-        Console.WriteLine($"=== RESULTS: {passedCount}/{testFiles.Length} KRA Tests Passed, Config Fast-Path {(isConfigValid ? "Passed" : "Failed")} ===");
+        // Target 3: Skia Raster Single-Pass Fast Decode Test
+        Console.WriteLine("--- [Target 3: Skia Raster Single-Pass Fast Decode] ---");
+        var sampleWebp = @"c:\Users\Leonardo\001\00__DEV\ImageGlass-Krita\ImageGlass\source\__assets\__app\_themes\Kobe\preview.webp";
+        bool skiaPassed = false;
+        if (File.Exists(sampleWebp))
+        {
+            bool isFastRaster = SkiaCodec.IsFastRasterFormat(sampleWebp);
+            var swSkia = Stopwatch.StartNew();
+            var (sMeta, sOut) = SkiaCodec.DecodeFast(sampleWebp, new PhotoReadOptions());
+            swSkia.Stop();
+
+            var photoWebp = new Photo(sampleWebp);
+            var swPhotoWebp = Stopwatch.StartNew();
+            await photoWebp.LoadAsync(useCache: false);
+            swPhotoWebp.Stop();
+
+            skiaPassed = isFastRaster && sOut.SingleFrame != null && photoWebp.State == PhotoState.Loaded;
+            Console.WriteLine($"  Skia DecodeFast:   {swSkia.ElapsedMilliseconds} ms ({sMeta.Width}x{sMeta.Height})");
+            Console.WriteLine($"  Photo.LoadAsync:   {swPhotoWebp.ElapsedMilliseconds} ms (State={photoWebp.State}, Codec={photoWebp.CodecId})");
+            if (skiaPassed)
+            {
+                Console.WriteLine("  ✅ Skia Fast-Path PASSED\n");
+            }
+            else
+            {
+                Console.WriteLine("  ❌ Skia Fast-Path FAILED\n");
+            }
+        }
+
+        Console.WriteLine($"=== RESULTS: {passedCount}/{testFiles.Length} KRA Tests Passed, Config Fast-Path {(isConfigValid ? "Passed" : "Failed")}, Skia Fast-Path {(skiaPassed ? "Passed" : "Failed")} ===");
     }
 }
