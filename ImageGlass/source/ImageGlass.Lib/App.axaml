@@ -25,18 +25,13 @@
 
     <Application.Styles>
         <FluentTheme />
-        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/ButtonStyle.axaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/ComboBoxStyle.axaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/TextBoxStyle.axaml" />
-        <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/NumericUpDownStyle.axaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/CheckBoxStyle.axaml" />
-        <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/RadioButtonStyle.axaml" />
-        <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/ToggleSwitchStyle.axaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/MenuStyle.axaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/ListBoxItemStyle.axaml" />
         <StyleInclude Source="avares://ImageGlass.Lib/UI/Styles/ControlStyle.axaml" />
-
     </Application.Styles>
 
 
@@ -45,12 +40,10 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/CommonResources.axaml" />
-                <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/ToggleSwitchResources.axaml" />
                 <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/IconResources.axaml" />
                 <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/ScrollBarResources.axaml" />
                 <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/MenuResources.axaml" />
                 <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/ComboBoxResources.axaml" />
-                <ResourceInclude Source="avares://ImageGlass.Lib/UI/Styles/SliderStyle.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

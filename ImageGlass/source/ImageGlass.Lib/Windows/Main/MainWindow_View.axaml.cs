@@ -811,18 +811,7 @@ public partial class MainWindowView : PhControl
             }
         }
 
-        // a non-built-in type may need a codec plugin still loading; wait for discovery
-        var ext = Path.GetExtension(pathToLoad);
-        if (!string.IsNullOrEmpty(ext)
-            && !Config.DefaultFileFormats.Contains(ext, StringComparer.OrdinalIgnoreCase))
-        {
-            StartupTrace.Mark("plugins:await:begin");
-            try { await Core.PluginDiscoveryTask; } catch { }
-            StartupTrace.Mark("plugins:await:end");
-            StartupTrace.Flush();
-        }
-
-        // start loading path with the foreground shell
+        // start loading path
         PrepareLoadPhotoList([pathToLoad],
             currentFilePath: null, disposeForegroundShell: false, reloadInitPhoto: true);
     }
@@ -833,17 +822,8 @@ public partial class MainWindowView : PhControl
         // dispose the foreground shell if requested
         if (disposeForegroundShell) Core.ShellProvider?.ForegroundShell = null;
 
-
-        // check if we should load images from foreground window
-        var useForegroundWindow = Core.ShellProvider?.CanUseForegroundShell() ?? false;
-        var foregroundShell = useForegroundWindow
-            ? Core.ShellProvider?.ForegroundShell
-            : null;
-
-
         Dispatcher.UIThread.Post(async () =>
         {
-            // include the opened file's own type so it's listed even before its plugin loads
             var allowedExts = Core.GetSupportedFileExtensions();
             AddFileExtension(allowedExts, currentFilePath);
             foreach (var p in inputPaths) AddFileExtension(allowedExts, p);
@@ -852,8 +832,8 @@ public partial class MainWindowView : PhControl
             var searchOptions = new FileSearchOptions()
             {
                 AllowedExtensions = allowedExts,
-                UseExplorerSortOrder = Core.Config.EnableExplorerSortOrder,
-                ForegroundShell = foregroundShell,
+                UseExplorerSortOrder = false,
+                ForegroundShell = null,
                 SearchSubDirectories = Core.Config.EnableSubfoldersLoading,
                 GroupByDir = Core.Config.EnableImageFolderGrouping,
                 IncludeHidden = Core.Config.EnableHiddenImagesLoading,
@@ -861,7 +841,6 @@ public partial class MainWindowView : PhControl
                 OrderType = Core.Config.ImageLoadingOrderType,
             };
             var initPhoto = Core.Photos.StartLoadingFiles(inputPaths, currentFilePath, searchOptions, Files_Searched, reloadInitPhoto);
-
 
             if (reloadInitPhoto && initPhoto is not null)
             {

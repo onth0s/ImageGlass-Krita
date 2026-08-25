@@ -113,12 +113,6 @@ public partial class App : Application
             // set shutdown mode
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
-            // get foreground shell
-            if (Core.Config.EnableExplorerSortOrder)
-            {
-                Core.ShellProvider?.ForegroundShell = Core.ShellProvider.GetForegroundWindowView();
-            }
-
             // set init image path
             Core.UpdateInitImagePath();
 
@@ -127,21 +121,9 @@ public partial class App : Application
             CreateMainWindowIfNotExist();
             StartupTrace.Mark("MainWindow:ctor:end");
 
-            // discover native (in-process) codec plugins from the _plugins folder (background)
-            Core.DiscoverPlugins();
-
-            // register external (OOP) tools from Config.Tools (igconfig.json)
-            Core.RegisterExternalTools();
-            StartupTrace.Mark("RegisterTools:done");
-
-            // wait for UI settings ready
-            await _taskUi.Task;
-            StartupTrace.Mark("Theme:ready");
-
             desktop.MainWindow = MainWindow;
 
-            // if user settings failed to load, report it first; on Quit the modal exits the app,
-            // on Continue we fall through to Quick Setup (which the reset/default config triggers)
+            // if user settings failed to load, report it first
             if (Config.LoadingException is not null)
             {
                 var isContinue = await ModalWindow.ShowUnhandledErrorAsync(
@@ -149,13 +131,6 @@ public partial class App : Application
                     "IGE: There was an error while loading user settings");
                 if (!isContinue) return;
             }
-
-            // if an incompatible user config was found and reset, warn before continuing;
-            // on No we exit without writing config, on Yes we fall through to Quick Setup
-            if (!await ConfirmIncompatibleConfigResetAsync()) return;
-
-            // force Quick Setup on first run; false = app is exiting/restarting
-            if (!await RunStartupQuickSetupAsync()) return;
 
             // show main window
             MainWindow.Show();
@@ -482,22 +457,6 @@ public partial class App : Application
 
         // initialize service providers
         Core.API = new AppAPIProvider();
-
-
-        // initialize update provider and auto-check
-        _ = InitializeUpdateProviderAsync();
-    }
-
-
-    /// <summary>
-    /// Initializes the update provider and fires a silent update check.
-    /// </summary>
-    private static async Task InitializeUpdateProviderAsync()
-    {
-        Core.Update = new UpdateProvider();
-
-        // silent check handles disabled/interval logic
-        _ = await Core.API.RunApiAsync(API.IG_CheckForUpdate, "false");
     }
 
 
@@ -532,10 +491,6 @@ public partial class App : Application
                 if (!isContinue) return;
             }
         }
-
-
-        // initialize Magick decoder on background thread
-        _ = Task.Run(MagickCodec.Initialize);
 
         // load app language
         _ = Core.Config.LoadCurrentLanguageAsync();
