@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ImageGlass.Common.Loggers;
 using ImageGlass.Common.ServiceProviders;
 using ImageGlass.Common.Types;
@@ -92,11 +93,14 @@ public partial class MainWindow : PhWindow
             if (Core.Config.EnableFullScreen) WindowState = WindowState.FullScreen;
         }
 
-        // load color profile
-        Core.UpdateDestColorProfile();
+        // load color profile in background without blocking first frame
+        Dispatcher.UIThread.Post(() => Core.UpdateDestColorProfile(), DispatcherPriority.Background);
 
-        // restore last opened tool
-        _ = await Core.API.RunApiAsync(API.IG_OpenTool, Core.Config.LastOpenedTool);
+        // restore last opened tool if configured
+        if (!string.IsNullOrEmpty(Core.Config.LastOpenedTool))
+        {
+            _ = await Core.API.RunApiAsync(API.IG_OpenTool, Core.Config.LastOpenedTool);
+        }
     }
 
 

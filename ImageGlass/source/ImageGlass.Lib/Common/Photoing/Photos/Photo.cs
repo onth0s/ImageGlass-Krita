@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -580,46 +580,73 @@ public partial class Photo : PhDisposable
             Error = null;
 
 
-            // 1. load metadata ===================
-            // cancel if requested
-            if (token.IsCancellationRequested) return;
-
-            // load metadata
-            await LoadMetadataAsync(useCache);
-            PhotoTrace.Mark("metadata:loaded", FilePath, DescribeMetadata(Metadata));
-
-            if (!skipLoadingEvent)
+            // Unified single-pass decode for Krita (.kra) files
+            if (KritaCodec.IsKraFile(FilePath))
             {
-                if (handleProgressFn is not null)
+                Error = await Task.Factory.StartNew(() =>
                 {
-                    PhotoTrace.Mark("preview:dispatch", FilePath);
-                    await handleProgressFn(new(PhotoState.Preview, this, token));
-                }
+                    try
+                    {
+                        var (meta, output) = KritaCodec.DecodeFast(FilePath, ReadOptions);
+                        Metadata.Dispose();
+                        Metadata = meta;
+                        _width = (uint)output.Size.Width;
+                        _height = (uint)output.Size.Height;
+                        Bitmap = output.SingleFrame;
+                        CodecId = "krita.skia";
+                        return null;
+                    }
+                    catch (Exception ex)
+                    {
+                        return ex;
+                    }
+                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                PhotoTrace.Mark("decode:single-pass", FilePath, $"kra={_width}x{_height}");
             }
-
-
-            // 2. load image data ===================
-            // cancel if requested
-            if (token.IsCancellationRequested) return;
-
-            // decode the photo on a dedicated thread to avoid thread pool starvation
-            // (thumbnail loading can saturate the thread pool when OS thumbnail cache is disabled)
-            Error = await Task.Factory.StartNew(async () =>
+            else
             {
-                try
+                // 1. load metadata ===================
+                // cancel if requested
+                if (token.IsCancellationRequested) return;
+
+                // load metadata
+                await LoadMetadataAsync(useCache);
+                PhotoTrace.Mark("metadata:loaded", FilePath, DescribeMetadata(Metadata));
+
+                if (!skipLoadingEvent)
                 {
-                    await OnDecodingAsync(Metadata, token);
-                    return null;
+                    if (handleProgressFn is not null)
+                    {
+                        PhotoTrace.Mark("preview:dispatch", FilePath);
+                        await handleProgressFn(new(PhotoState.Preview, this, token));
+                    }
                 }
-                catch (TaskCanceledException)
+
+
+                // 2. load image data ===================
+                // cancel if requested
+                if (token.IsCancellationRequested) return;
+
+                // decode the photo on a dedicated thread to avoid thread pool starvation
+                // (thumbnail loading can saturate the thread pool when OS thumbnail cache is disabled)
+                Error = await Task.Factory.StartNew(async () =>
                 {
-                    return null;
-                }
-                catch (Exception ex)
-                {
-                    return ex;
-                }
-            }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+                    try
+                    {
+                        await OnDecodingAsync(Metadata, token);
+                        return null;
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        return null;
+                    }
+                    catch (Exception ex)
+                    {
+                        return ex;
+                    }
+                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+            }
 
             if (Error is not null) PhotoTrace.Mark("decode:error", FilePath, Error.Message);
 

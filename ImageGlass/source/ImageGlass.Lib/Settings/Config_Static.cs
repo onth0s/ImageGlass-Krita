@@ -551,6 +551,30 @@ public partial class Config
         {
             var jsonOptions = BHelper.CreateJsonOptions();
             var jsonContext = new ConfigJsonContext(jsonOptions);
+            var userConfigPath = BHelper.ConfigDir(configFileName);
+            var cliOverrides = ParseCliConfigArgs(cliArgs);
+
+            // Fast-path: direct deserialization when no CLI overrides, no admin config, and user config exists
+            if (cliOverrides.Count == 0 && !Const.ENABLE_ADMIN_CONFIG && File.Exists(userConfigPath))
+            {
+                try
+                {
+                    var userJsonBytes = File.ReadAllBytes(userConfigPath);
+                    using var testDoc = JsonDocument.Parse(userJsonBytes);
+                    if (IsCompatibleConfigLayer(testDoc))
+                    {
+                        var fastConfig = JsonSerializer.Deserialize(userJsonBytes, jsonContext.Config);
+                        if (fastConfig is not null)
+                        {
+                            return MigrateUserConfigFile(fastConfig);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Fall back to multi-layer merge on any format issue
+                }
+            }
 
             // 1. read igconfig.default.json (Startup Dir, then Config Dir fallback)
             using var defaultDoc = ReadConfigJsonDocument(
@@ -558,11 +582,7 @@ public partial class Config
                 BHelper.ConfigDir(CONFIG_DEFAULT));
 
             // 2. read igconfig.json (Config Dir only)
-            var userConfigPath = BHelper.ConfigDir(configFileName);
             using var userDoc = BHelper.ReadJsonDocFromFile(userConfigPath);
-
-            // 3. parse CLI -p: args
-            var cliOverrides = ParseCliConfigArgs(cliArgs);
 
             // 4. read igconfig.admin.json (install BaseDir ONLY; a ConfigDir fallback would let
             // a user drop an admin config in AppData and seize top precedence). Merge-only layer.

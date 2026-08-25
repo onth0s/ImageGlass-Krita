@@ -142,4 +142,41 @@ public static class KritaCodec
             SingleFrame = image
         };
     }
+
+    /// <summary>
+    /// Unified single-pass decode: extracts preview stream, reads dimensions and decodes SKImage in one pass.
+    /// </summary>
+    public static (PhotoMetadata Meta, SkiaDecoderOutput Output) DecodeFast(string filePath, PhotoReadOptions options)
+    {
+        using var stream = OpenPreviewStream(filePath);
+        if (stream is null)
+        {
+            throw new InvalidDataException($"Failed to extract preview image from Krita file: {filePath}");
+        }
+
+        var image = SKImage.FromEncodedData(stream);
+        if (image is null || image.Handle == IntPtr.Zero)
+        {
+            throw new InvalidDataException($"Failed to decode preview PNG from Krita file: {filePath}");
+        }
+
+        var meta = new PhotoMetadata(filePath)
+        {
+            IsVector = false,
+            FrameCount = 1,
+            HasAlpha = true,
+            OriginalWidth = (uint)image.Width,
+            Width = (uint)image.Width,
+            OriginalHeight = (uint)image.Height,
+            Height = (uint)image.Height,
+        };
+
+        var output = new SkiaDecoderOutput
+        {
+            Size = new Size(image.Width, image.Height),
+            SingleFrame = image
+        };
+
+        return (meta, output);
+    }
 }
