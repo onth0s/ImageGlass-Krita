@@ -13,3 +13,5 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "`nBuild Failed!" -ForegroundColor Red
     exit $LASTEXITCODE
 }
+
+Read-Host -Prompt "Press Enter to exit"
