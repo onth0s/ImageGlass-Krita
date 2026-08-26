@@ -665,10 +665,9 @@ public partial class ViewerControl : PhControl
 
 
         // photo is loaded, render full resolution directly from cache
-        if (_loadingOptions.UseCache && inputPhoto.State == PhotoState.Loaded && ShouldLoadFullResolution)
+        if (_loadingOptions.UseCache && inputPhoto.State == PhotoState.Loaded && inputPhoto.IsBitmapUsable && ShouldLoadFullResolution)
         {
-            var token = inputPhoto.CancelToken ?? default;
-            await HandlePhotoLoadedAsync(new(PhotoState.Loaded, inputPhoto, token));
+            await HandlePhotoLoadedAsync(new(PhotoState.Loaded, inputPhoto, CancellationToken.None));
         }
         else
         {
@@ -869,7 +868,7 @@ public partial class ViewerControl : PhControl
 
 
             // 3. create the native bitmap
-            if (e.Photo.Bitmap is not null)
+            if (e.Photo.IsBitmapUsable)
             {
                 // vector (SVG) source
                 if (e.Photo.Bitmap is SkiaVectorSource)

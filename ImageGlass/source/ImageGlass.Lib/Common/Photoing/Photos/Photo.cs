@@ -73,6 +73,14 @@ public partial class Photo : PhDisposable
     /// </summary>
     public IDisposable? Bitmap { get; private set; } = null;
 
+
+    /// <summary>
+    /// Whether <see cref="Bitmap"/> is non-null and not disposed.
+    /// </summary>
+    public bool IsBitmapUsable => Bitmap is not null
+        && (Bitmap is not SKImage img || !img.IsDisposed());
+
+
     /// <summary>
     /// Gets the size of the photo.
     /// </summary>
@@ -536,9 +544,13 @@ public partial class Photo : PhDisposable
         bool skipLoadingEvent = false)
     {
         // use cached data
-        if (useCache && State != PhotoState.None)
+        if (useCache && State == PhotoState.Loaded && IsBitmapUsable)
         {
             PhotoTrace.Mark("load:cache-hit", FilePath, $"state={State}");
+            if (handleProgressFn is not null)
+            {
+                await handleProgressFn(new(PhotoState.Loaded, this, CancellationToken.None));
+            }
             return;
         }
         var token = CancelLoading();
@@ -749,7 +761,7 @@ public partial class Photo : PhDisposable
         }
 
         // 2. cache hit: requested frame is already loaded in Bitmap
-        if (frameIndex == _frameIndex && Bitmap is SKImage cachedImg)
+        if (frameIndex == _frameIndex && Bitmap is SKImage cachedImg && !cachedImg.IsDisposed())
         {
             return cachedImg;
         }
