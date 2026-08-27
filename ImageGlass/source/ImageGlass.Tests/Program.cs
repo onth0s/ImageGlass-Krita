@@ -224,6 +224,7 @@ class Program
             AppBuilder.Configure<Application>()
                 .UsePlatformDetect()
                 .SetupWithoutStarting();
+            SynchronizationContext.SetSynchronizationContext(null);
         }
         catch { }
 
