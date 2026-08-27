@@ -44,8 +44,10 @@ public partial class ViewerControl
     /// </summary>
     private void DisposeVectorResources()
     {
+        _animator?.FrameChanged -= Animator_FrameChanged;
+        _animator?.Dispose();
+        _animator = null;
         _svgPicture = null;
-        _svgDocument?.Dispose();
         _svgDocument = null;
     }
 
@@ -62,12 +64,9 @@ public partial class ViewerControl
         // dispose old vector resources before taking new ones
         DisposeVectorResources();
 
-        // take ownership of the SVG document and picture
+        // reference the SVG document and picture from vectorSource
         _svgDocument = vectorSource.SvgDocument;
         _svgPicture = vectorSource.VectorPicture;
-
-        // prevent Photo.UnloadBitmap() from disposing our SVG
-        vectorSource.SvgDocument = null;
 
         SourceKind = PhotoSource.VectorRenderer;
 
@@ -76,17 +75,13 @@ public partial class ViewerControl
 
         // set pre-rasterized fallback as _imgSource (for pixel operations: copy, export)
         SKImageRef.Set(ref _imgSource, vectorSource.RasterizedFallback);
-        vectorSource.RasterizedFallback = null; // transfer ownership
 
         // mark for first draw
         _isFirstDraw.SetTrue();
 
         // set up SMIL animation if the SVG has animations
-        if (_svgDocument!.HasAnimations)
+        if (_svgDocument is not null && _svgDocument.HasAnimations)
         {
-            _animator?.FrameChanged -= Animator_FrameChanged;
-            _animator?.Dispose();
-
             _animator = new SvgAnimator(
                 _svgDocument,
                 _lock,

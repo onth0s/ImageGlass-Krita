@@ -107,7 +107,7 @@ public static class SvgCodec
         var targetH = (int)Math.Ceiling(h * scale);
         if (targetW <= 0 || targetH <= 0) return null;
 
-        var info = new SKImageInfo(targetW, targetH, SKColorType.Rgba8888, SKAlphaType.Premul);
+        var info = new SKImageInfo(targetW, targetH, SKColorType.Bgra8888, SKAlphaType.Premul);
         using var surface = SKSurface.Create(info);
         if (surface is null) return null;
 

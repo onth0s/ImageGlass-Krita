@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -74,13 +74,14 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
         var maxSize = minSize * 2;
 
         // 1. fast path: try to get the quick preview
-        var imgPreview = await GetPreviewAsync(meta, minSize, token);
+        var imgPreview = await GetPreviewAsync(meta, minSize, token).ConfigureAwait(false);
 
 
         // 2. slow path: use ImageMagick for unsupported formats
         if (imgPreview.IsDisposed())
         {
-            using var imgM = await MagickCodec.QuickDecodeAsync(meta.FilePath, maxSize, maxSize, token: token);
+            using var imgM = await MagickCodec.QuickDecodeAsync(meta.FilePath, maxSize, maxSize, token: token)
+                .ConfigureAwait(false);
             imgPreview = SkiaCodec.FromMagick(imgM, meta.SkiaColorSpace);
         }
 
@@ -90,14 +91,14 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
         //     ImageMagick can decode on their own.
         if (imgPreview.IsDisposed())
         {
-            imgPreview = await DecodeViaCodecRegistryAsync(meta, maxSize, token);
+            imgPreview = await DecodeViaCodecRegistryAsync(meta, maxSize, token).ConfigureAwait(false);
         }
 
 
         // 3. resize if needed
         if (minSize > 0 && (imgPreview?.Width > maxSize || imgPreview?.Height > maxSize))
         {
-            var resizedBmpPreview = await SkiaCodec.ResizeAsync(imgPreview, minSize, token: token);
+            var resizedBmpPreview = await SkiaCodec.ResizeAsync(imgPreview, minSize, token: token).ConfigureAwait(false);
             imgPreview?.Dispose();
             imgPreview = SKImage.FromBitmap(resizedBmpPreview);
         }
@@ -135,10 +136,28 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
 
         using var result = await codec.DecodeAsync(meta, options, context, token).ConfigureAwait(false);
 
-        // detach the raster frame so disposing the result does not dispose it
-        var imgFrame = result.SingleFrame;
-        result.SingleFrame = null;
-        return imgFrame;
+        // detach the raster frame or vector fallback so disposing the result does not dispose it
+        if (result.SingleFrame is not null)
+        {
+            var imgFrame = result.SingleFrame;
+            result.SingleFrame = null;
+            return imgFrame;
+        }
+
+        if (result.VectorSource is not null)
+        {
+            var imgFrame = result.VectorSource.RasterizedFallback;
+            result.VectorSource.RasterizedFallback = null;
+
+            if (imgFrame is null && result.VectorSource.VectorPicture is not null)
+            {
+                imgFrame = SvgCodec.RasterizeThumbnail(result.VectorSource.VectorPicture, maxSize);
+            }
+
+            return imgFrame;
+        }
+
+        return null;
     }
 
 
@@ -150,12 +169,14 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
         output = null;
         if (imgPreview.IsDisposed()) return false;
 
+        var changed = false;
 
         // 1. apply orientation
         if (SkiaCodec.TryApplyOrientation(imgPreview, meta.Orientation, out var imgOriented))
         {
             output?.Dispose();
             output = imgOriented;
+            changed = true;
         }
 
 
@@ -164,9 +185,10 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
         {
             output?.Dispose();
             output = imgFrameColored;
+            changed = true;
         }
 
-        return true;
+        return changed;
     }
 
 }

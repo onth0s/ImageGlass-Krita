@@ -26,14 +26,12 @@ namespace ImageGlass.Common.Photoing;
 
 /// <summary>
 /// Holds the SVG document and vector picture for scalable rendering.
-/// The viewer takes ownership of <see cref="SvgDocument"/> by setting it
-/// to <c>null</c> after capturing the reference.
+/// Owned and managed by <see cref="Photo.Bitmap"/>.
 /// </summary>
 public sealed class SkiaVectorSource : PhDisposable
 {
     /// <summary>
     /// Gets, sets the SVG document. Owns the <see cref="VectorPicture"/>.
-    /// Set to <c>null</c> when transferring ownership to the viewer.
     /// </summary>
     public SKSvg? SvgDocument { get; set; }
 
@@ -45,7 +43,6 @@ public sealed class SkiaVectorSource : PhDisposable
 
     /// <summary>
     /// Gets, sets the pre-rasterized fallback for pixel operations (copy, export).
-    /// Set to <c>null</c> when transferring ownership to the viewer.
     /// </summary>
     public SKImage? RasterizedFallback { get; set; }
 

@@ -346,6 +346,17 @@ public static partial class SkiaCodec
     {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return null;
 
+        if (SvgCodec.IsSvgFile(filePath))
+        {
+            try
+            {
+                using var svgDoc = SvgCodec.LoadSvg(filePath);
+                var picture = svgDoc.Picture;
+                return picture is not null ? SvgCodec.RasterizeThumbnail(picture, maxDimension) : null;
+            }
+            catch { return null; }
+        }
+
         try
         {
             using var codec = SKCodec.Create(filePath);

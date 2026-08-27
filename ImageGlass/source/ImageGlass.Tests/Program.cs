@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
+using ImageGlass.Common;
+using ImageGlass.Common.Photoing;
+using ImageGlass.Common.ServiceProviders;
 using ImageGlass.Common.Types;
 using ImageGlass.UI.Viewer;
+using SkiaSharp;
 using Point = Avalonia.Point;
 using Size = Avalonia.Size;
 
@@ -11,8 +18,15 @@ namespace ImageGlass.Tests;
 
 class Program
 {
-    static int Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
+        var svgPass = await RunSvgPipelineTestsAsync();
+        if (!svgPass)
+        {
+            Console.WriteLine("SVG PIPELINE TESTS FAILED!");
+            return 1;
+        }
+
         Console.WriteLine("=========================================================================");
         Console.WriteLine("  AUTOMATED DOUBLE-CLICK PIVOT ZOOM & UNIQUE COLOR MATCH TEST SUITE");
         Console.WriteLine("=========================================================================");
@@ -196,5 +210,162 @@ class Program
         }
 
         return xClamped || yClamped;
+    }
+
+    private static async Task<bool> RunSvgPipelineTestsAsync()
+    {
+        Console.WriteLine("=========================================================================");
+        Console.WriteLine("  AUTOMATED SVG VIEWING & THUMBNAIL PIPELINE TEST SUITE");
+        Console.WriteLine("=========================================================================");
+        Console.WriteLine();
+
+        try
+        {
+            AppBuilder.Configure<Application>()
+                .UsePlatformDetect()
+                .SetupWithoutStarting();
+        }
+        catch { }
+
+        Core.PreviewProvider = new PhotoPreviewProvider();
+        Core.Config = new Config { EnableVectorRenderer = true };
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "IG_SvgTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var svg1Path = Path.Combine(tempDir, "test1.svg");
+            var svg2Path = Path.Combine(tempDir, "test2.svg");
+
+            File.WriteAllText(svg1Path, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 500 500\" width=\"500\" height=\"500\"><circle cx=\"250\" cy=\"250\" r=\"200\" fill=\"blue\" /></svg>");
+            File.WriteAllText(svg2Path, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 600\" width=\"800\" height=\"600\"><rect width=\"800\" height=\"600\" fill=\"green\" /></svg>");
+
+            // Test 1: SvgCodec Metadata Loading
+            Console.Write("Test 1: SvgCodec.LoadMetadataAsync... ");
+            var meta1 = await SvgCodec.LoadMetadataAsync(svg1Path);
+            if (!meta1.IsVector || meta1.Width != 500 || meta1.Height != 500)
+            {
+                Console.WriteLine($"FAILED! Expected 500x500 vector, got {meta1.Width}x{meta1.Height}, isVector={meta1.IsVector}");
+                return false;
+            }
+            Console.WriteLine("PASSED");
+
+            // Test 2: SvgCodec Direct Thumbnail Rasterization
+            Console.Write("Test 2: SvgCodec.RasterizeThumbnail... ");
+            using (var doc = SvgCodec.LoadSvg(svg1Path))
+            {
+                if (doc.Picture is null) { Console.WriteLine("FAILED! Picture is null"); return false; }
+                using var thumb = SvgCodec.RasterizeThumbnail(doc.Picture, 100);
+                if (thumb is null || thumb.Width != 100 || thumb.Height != 100)
+                {
+                    Console.WriteLine($"FAILED! Expected 100x100 thumb, got {thumb?.Width}x{thumb?.Height}");
+                    return false;
+                }
+            }
+            Console.WriteLine("PASSED");
+
+            // Test 3: SkiaCodec.LoadThumbnail for SVG
+            Console.Write("Test 3: SkiaCodec.LoadThumbnail for SVG... ");
+            using (var thumb = SkiaCodec.LoadThumbnail(svg1Path, 120))
+            {
+                if (thumb is null || thumb.Width != 120 || thumb.Height != 120)
+                {
+                    Console.WriteLine($"FAILED! Expected 120x120 thumb, got {thumb?.Width}x{thumb?.Height}");
+                    return false;
+                }
+            }
+            Console.WriteLine("PASSED");
+
+            // Test 4: PhotoPreviewProvider.GetThumbnailAsync for SVG
+            Console.Write("Test 4: PhotoPreviewProvider.GetThumbnailAsync for SVG... ");
+            var previewProvider = new PhotoPreviewProvider();
+            using (var thumb = await previewProvider.GetThumbnailAsync(meta1, 80))
+            {
+                if (thumb is null || thumb.Width <= 0 || thumb.Height <= 0)
+                {
+                    Console.WriteLine("FAILED! Returned null or empty thumbnail");
+                    return false;
+                }
+            }
+            Console.WriteLine("PASSED");
+
+            // Test 5: Photo.LoadThumbnailAsync End-to-End
+            Console.Write("Test 5: Photo.LoadThumbnailAsync End-to-End... ");
+            var photo1 = new Photo { FilePath = svg1Path };
+            await photo1.LoadThumbnailAsync(60, false);
+            if (photo1.GalleryThumbnail is null || photo1.GalleryThumbnail.PixelSize.Width <= 0)
+            {
+                Console.WriteLine("FAILED! Photo.GalleryThumbnail is null or empty");
+                return false;
+            }
+            Console.WriteLine($"PASSED (Thumbnail size: {photo1.GalleryThumbnail.PixelSize.Width}x{photo1.GalleryThumbnail.PixelSize.Height})");
+
+            // Test 6: Vector Navigation & Buffer Retention in ViewerControl
+            Console.Write("Test 6: ViewerControl SVG Buffer Retention across Navigation Cycle... ");
+            var photo2 = new Photo { FilePath = svg2Path };
+            await photo1.LoadAsync(true);
+            await photo2.LoadAsync(true);
+
+            if (photo1.Bitmap is not SkiaVectorSource vs1 || photo2.Bitmap is not SkiaVectorSource vs2)
+            {
+                Console.WriteLine("FAILED! Photo.Bitmap is not SkiaVectorSource");
+                return false;
+            }
+
+            var viewer = new ViewerControl();
+            var handleMethod = typeof(ViewerControl).GetMethod("HandleVectorPhotoLoaded", BindingFlags.NonPublic | BindingFlags.Instance);
+            var svgPictureField = typeof(ViewerControl).GetField("_svgPicture", BindingFlags.NonPublic | BindingFlags.Instance);
+            var svgDocField = typeof(ViewerControl).GetField("_svgDocument", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            // Step A: Load Photo 1 into Viewer
+            handleMethod?.Invoke(viewer, [vs1]);
+            if (vs1.SvgDocument is null || vs1.VectorPicture is null)
+            {
+                Console.WriteLine("FAILED! HandleVectorPhotoLoaded mutated and destroyed vs1!");
+                return false;
+            }
+            if (svgPictureField?.GetValue(viewer) is null)
+            {
+                Console.WriteLine("FAILED! _svgPicture is null on viewer after loading vs1");
+                return false;
+            }
+
+            // Step B: Navigate to Photo 2 (unloads photo 1 resources in viewer)
+            handleMethod?.Invoke(viewer, [vs2]);
+            if (vs1.SvgDocument is null || vs1.VectorPicture is null)
+            {
+                Console.WriteLine("FAILED! Navigating to vs2 destroyed cached vs1!");
+                return false;
+            }
+
+            // Step C: Navigate BACK to Photo 1 (cycle back / wrap)
+            var handledBack = (bool)handleMethod?.Invoke(viewer, [vs1])!;
+            if (!handledBack)
+            {
+                Console.WriteLine("FAILED! HandleVectorPhotoLoaded returned false when cycling back to vs1!");
+                return false;
+            }
+            if (svgPictureField?.GetValue(viewer) is null || svgDocField?.GetValue(viewer) is null)
+            {
+                Console.WriteLine("FAILED! _svgPicture or _svgDocument is null after cycling back to vs1!");
+                return false;
+            }
+            Console.WriteLine("PASSED");
+
+            Console.WriteLine();
+            Console.WriteLine("ALL 6 SVG PIPELINE TESTS PASSED SUCCESSFULLY!");
+            Console.WriteLine();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"FAILED WITH EXCEPTION: {ex}");
+            return false;
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
     }
 }

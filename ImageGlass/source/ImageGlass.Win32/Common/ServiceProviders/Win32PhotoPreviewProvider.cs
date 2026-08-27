@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -35,8 +35,10 @@ public class Win32PhotoPreviewProvider : PhotoPreviewProvider
     /// </summary>
     public override async Task<SKImage?> GetPreviewAsync(PhotoMetadata meta, double? minHeight, CancellationToken token = default)
     {
-        // 0. if don't use shell thumbnail if not allowed
-        if (!Core.Config.EnableGalleryShellThumbnail)
+        // 0. don't use shell thumbnail if not allowed or if native vector rendering is preferred
+        if (!Core.Config.EnableGalleryShellThumbnail
+            || meta.IsVector
+            || SvgCodec.IsSvgFile(meta.FilePath))
         {
             return await base.GetPreviewAsync(meta, minHeight, token);
         }

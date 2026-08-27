@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
     <ProjectReference Include="..\ImageGlass.Lib\ImageGlass.Lib.csproj" />
   </ItemGroup>
 </Project>

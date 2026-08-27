@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -130,16 +130,37 @@ public static class Win32ShellThumbnailApi
                 return null;
             }
 
-            // source bitmap has no alpha channel (< 32bpp): GetDIBits leaves
-            // alpha bytes as 0x00, making the image fully transparent.
-            // Set them to 0xFF for correct opaque display.
+            // source bitmap has no alpha channel (< 32bpp) or is a 32bpp GDI RGBX
+            // bitmap where alpha was left uninitialized (all 0x00).
+            // Set them to 0xFF so the thumbnail is not rendered completely transparent.
+            var pixels = (byte*)bmpOutput.GetPixels();
+            var totalPixels = bm.bmWidth * bm.bmHeight;
+
             if (bm.bmBitsPixel < 32)
             {
-                var pixels = (byte*)bmpOutput.GetPixels();
-                var totalPixels = bm.bmWidth * bm.bmHeight;
                 for (var i = 0; i < totalPixels; i++)
                 {
                     pixels[i * 4 + 3] = 0xFF;
+                }
+            }
+            else
+            {
+                var hasNonZeroAlpha = false;
+                for (var i = 0; i < totalPixels; i++)
+                {
+                    if (pixels[i * 4 + 3] != 0)
+                    {
+                        hasNonZeroAlpha = true;
+                        break;
+                    }
+                }
+
+                if (!hasNonZeroAlpha)
+                {
+                    for (var i = 0; i < totalPixels; i++)
+                    {
+                        pixels[i * 4 + 3] = 0xFF;
+                    }
                 }
             }
 
