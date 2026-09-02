@@ -45,7 +45,24 @@ Enables panning past standard image boundaries until only 10% of the closest ima
 
 ---
 
-### 4. 🛠️ Hotkey & Stability Fixes
+### 4. 🖼️ Multi-Layer OpenEXR (.exr) & Blender Matcap Compositing
+Enhanced OpenEXR decoding to support complex multi-channel and multi-layer EXRs:
+- **Dynamic Pass Resolution**: Discovers and maps layer prefixes (`diffuse.*`, `specular.*`, `Combined.*`) via metadata and header channel lists.
+- **Beauty Pass Compositing**: Dynamically accumulates `diffuse + specular` passes in linear float space for Blender default matcap rendering.
+- **Thumbnail Gallery Pipeline**: Bypasses external Windows Shell thumbnail extraction for HDR/EXR formats in ImageGlass, ensuring internal HDR float decoding and tone-mapped thumbnails.
+
+---
+
+### 5. 🦀 Native Rust Windows Explorer OpenEXR Thumbnail Provider (`tools/exr_thumbnail_provider`)
+A high-performance, panic-safe native 64-bit Windows Shell Extension (`IThumbnailProvider` + `IInitializeWithStream`) written in pure Rust:
+- **Zero Runtime Dependencies**: Self-contained 64-bit DLL built with official Microsoft `windows` crate and pure Rust `exr` crate.
+- **Deterministic Color & Tone Pipeline**: Linear radiometric pass compositing, Reinhard tone mapping, and IEC 61966-2-1 sRGB transfer encoding with alpha premultiplication (`WTSAT_ARGB`).
+- **Safety Contract**: Hard input limits (256MB file, 128MB decoded allocation), stream re-entrancy, and complete panic isolation at COM ABI boundaries.
+- **Registration**: Includes `register.bat` / `unregister.bat` for instant installation.
+
+---
+
+### 6. 🛠️ Hotkey & Stability Fixes
 - **Hotkey Parsing**: Resolved exceptions during hotkey string serialization and custom keybinding initialization (`Hotkey.cs`).
 - **Debug Message Action**: Mapped key `S` to trigger on-screen debug diagnostic logging (`AppAPIProvider_Hotkeys.cs`).
 - **Preview Buffering Toggle**: Disabled asynchronous image preview buffering (`IsBufferedPreview = false`) for crisp, immediate frame rendering.
