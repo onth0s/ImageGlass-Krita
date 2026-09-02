@@ -46,7 +46,7 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
             using var thumbM = meta.GetEmbeddedPreview();
             if (thumbM is not null && thumbM.Height >= minHeight)
             {
-                imgPreview = SkiaCodec.FromMagick(thumbM, meta.SkiaColorSpace);
+                imgPreview = SkiaCodec.FromMagick(thumbM, meta.SkiaColorSpace, isHdr: meta.IsHdr);
             }
         }
 
@@ -82,7 +82,7 @@ public class PhotoPreviewProvider : IPhotoPreviewProvider
         {
             using var imgM = await MagickCodec.QuickDecodeAsync(meta.FilePath, maxSize, maxSize, token: token)
                 .ConfigureAwait(false);
-            imgPreview = SkiaCodec.FromMagick(imgM, meta.SkiaColorSpace);
+            imgPreview = SkiaCodec.FromMagick(imgM, meta.SkiaColorSpace, isHdr: meta.IsHdr);
         }
 
 

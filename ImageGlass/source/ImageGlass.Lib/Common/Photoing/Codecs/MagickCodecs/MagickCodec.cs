@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -1131,18 +1131,65 @@ public static partial class MagickCodec
         // EXR files may have extra channels (depth, normals, etc.) beyond RGB(A).
         var srcChannels = area.Length / pixelCount;
 
-        // Discover actual channel positions in Magick's internal order.
-        var chR = (int)(pixels.GetChannelIndex(PixelChannel.Red) ?? 0);
-        var chG = (int)(pixels.GetChannelIndex(PixelChannel.Green) ?? 1);
-        var chB = (int)(pixels.GetChannelIndex(PixelChannel.Blue) ?? 2);
-        var chA = hasAlpha ? (int)(pixels.GetChannelIndex(PixelChannel.Alpha) ?? 0u) : -1;
+        // Check if image is EXR or multi-channel EXR where standard channels might not be resolved
+        List<ExrPassMapping>? exrPasses = null;
+        var isExr = imgM.Format == MagickFormat.Exr
+            || (!string.IsNullOrEmpty(imgM.FileName) && imgM.FileName.EndsWith(".exr", StringComparison.OrdinalIgnoreCase));
+
+        if (isExr || pixels.GetChannelIndex(PixelChannel.Red) is null)
+        {
+            exrPasses = ResolveMagickExrPasses(imgM, pixels);
+        }
 
         var floatCount = pixelCount * 4; // always RGBA for Skia
         var nativeBuffer = new NativeMemoryArray<byte>(floatCount * sizeof(float), skipZeroClear: true, addMemoryPressure: true);
         var dst = MemoryMarshal.Cast<byte, float>(nativeBuffer.AsSpan());
 
         const float quantumScale = 1f / 65535f;
-        var srcIdx = 0;
+
+        if (exrPasses is { Count: > 0 })
+        {
+            var srcIdx = 0;
+            for (var i = 0; i < pixelCount; i++)
+            {
+                var dstIdx = i * 4;
+                float rSum = 0f;
+                float gSum = 0f;
+                float bSum = 0f;
+                float aVal = 1f;
+
+                for (var p = 0; p < exrPasses.Count; p++)
+                {
+                    var pass = exrPasses[p];
+                    rSum += (pass.R >= 0 && pass.R < srcChannels ? area[srcIdx + pass.R] : 0f) * quantumScale;
+                    gSum += (pass.G >= 0 && pass.G < srcChannels ? area[srcIdx + pass.G] : 0f) * quantumScale;
+                    bSum += (pass.B >= 0 && pass.B < srcChannels ? area[srcIdx + pass.B] : 0f) * quantumScale;
+
+                    if (pass.A >= 0 && pass.A < srcChannels)
+                    {
+                        var a = area[srcIdx + pass.A] * quantumScale;
+                        aVal = p == 0 ? a : MathF.Max(aVal, a);
+                    }
+                }
+
+                dst[dstIdx] = rSum;
+                dst[dstIdx + 1] = gSum;
+                dst[dstIdx + 2] = bSum;
+                dst[dstIdx + 3] = aVal;
+
+                srcIdx += srcChannels;
+            }
+
+            return nativeBuffer;
+        }
+
+        // Discover actual channel positions in Magick's internal order.
+        var chR = (int)(pixels.GetChannelIndex(PixelChannel.Red) ?? 0);
+        var chG = (int)(pixels.GetChannelIndex(PixelChannel.Green) ?? 1);
+        var chB = (int)(pixels.GetChannelIndex(PixelChannel.Blue) ?? 2);
+        var chA = hasAlpha ? (int)(pixels.GetChannelIndex(PixelChannel.Alpha) ?? 0u) : -1;
+
+        var srcIdxNormal = 0;
 
         for (var i = 0; i < pixelCount; i++)
         {
@@ -1150,26 +1197,26 @@ public static partial class MagickCodec
 
             if (srcChannels >= 3)
             {
-                dst[dstIdx] = area[srcIdx + chR] * quantumScale;
-                dst[dstIdx + 1] = area[srcIdx + chG] * quantumScale;
-                dst[dstIdx + 2] = area[srcIdx + chB] * quantumScale;
-                dst[dstIdx + 3] = chA >= 0 && srcIdx + chA < area.Length
-                    ? area[srcIdx + chA] * quantumScale
+                dst[dstIdx] = area[srcIdxNormal + chR] * quantumScale;
+                dst[dstIdx + 1] = area[srcIdxNormal + chG] * quantumScale;
+                dst[dstIdx + 2] = area[srcIdxNormal + chB] * quantumScale;
+                dst[dstIdx + 3] = chA >= 0 && srcIdxNormal + chA < area.Length
+                    ? area[srcIdxNormal + chA] * quantumScale
                     : 1f;
             }
             else
             {
                 // Grayscale (1 channel) or Gray+Alpha (2 channels)
-                var gray = area[srcIdx] * quantumScale;
+                var gray = area[srcIdxNormal] * quantumScale;
                 dst[dstIdx] = gray;
                 dst[dstIdx + 1] = gray;
                 dst[dstIdx + 2] = gray;
                 dst[dstIdx + 3] = chA >= 0 && srcChannels >= 2
-                    ? area[srcIdx + chA] * quantumScale
+                    ? area[srcIdxNormal + chA] * quantumScale
                     : 1f;
             }
 
-            srcIdx += srcChannels;
+            srcIdxNormal += srcChannels;
         }
 
         return nativeBuffer;

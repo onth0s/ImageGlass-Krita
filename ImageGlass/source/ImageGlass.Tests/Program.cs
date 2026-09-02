@@ -27,6 +27,13 @@ class Program
             return 1;
         }
 
+        var exrPass = await RunExrPipelineTestsAsync();
+        if (!exrPass)
+        {
+            Console.WriteLine("EXR PIPELINE TESTS FAILED!");
+            return 1;
+        }
+
         Console.WriteLine("=========================================================================");
         Console.WriteLine("  AUTOMATED DOUBLE-CLICK PIVOT ZOOM & UNIQUE COLOR MATCH TEST SUITE");
         Console.WriteLine("=========================================================================");
@@ -352,8 +359,6 @@ class Program
                 Console.WriteLine("FAILED! _svgPicture or _svgDocument is null after cycling back to vs1!");
                 return false;
             }
-            Console.WriteLine("PASSED");
-
             Console.WriteLine();
             Console.WriteLine("ALL 6 SVG PIPELINE TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine();
@@ -367,6 +372,153 @@ class Program
         finally
         {
             try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    private static async Task<bool> RunExrPipelineTestsAsync()
+    {
+        Console.WriteLine("=========================================================================");
+        Console.WriteLine("  AUTOMATED MULTI-CHANNEL & MULTI-LAYER OPENEXR PIPELINE TEST SUITE");
+        Console.WriteLine("=========================================================================");
+        Console.WriteLine();
+
+        try
+        {
+            MagickCodec.Initialize();
+
+            // Find scratch dir by walking up from BaseDirectory or CurrentDirectory
+            var cur = AppDomain.CurrentDomain.BaseDirectory;
+            string? scratchDir = null;
+            for (var depth = 0; depth < 10; depth++)
+            {
+                var candidate = Path.Combine(cur, "scratch");
+                if (Directory.Exists(candidate))
+                {
+                    scratchDir = candidate;
+                    break;
+                }
+                var parent = Directory.GetParent(cur)?.FullName;
+                if (parent is null || parent == cur) break;
+                cur = parent;
+            }
+
+            scratchDir ??= Path.GetFullPath("scratch");
+
+            Console.WriteLine($"Scratch dir: {scratchDir}");
+
+            var testFiles = new[]
+            {
+                ("toon_light.exr", true), // Blender multi-pass matcap (diffuse.*, specular.*)
+                ("check_normal+y.exr", false), // Standard RGB
+                ("spec_2.exr", false) // Standard RGBA
+            };
+
+            foreach (var (fileName, isMultiPass) in testFiles)
+            {
+                var filePath = Path.Combine(scratchDir, fileName);
+                if (!File.Exists(filePath))
+                {
+                    Console.WriteLine($"⚠️ File not found, skipping: {filePath}");
+                    continue;
+                }
+
+                Console.Write($"Testing EXR: {fileName}... ");
+                var meta = await MagickCodec.LoadMetadataAsync(filePath);
+                if (meta.Width <= 0 || meta.Height <= 0)
+                {
+                    Console.WriteLine($"FAILED! Invalid dimensions {meta.Width}x{meta.Height}");
+                    return false;
+                }
+
+                var decoded = await MagickCodec.DecodeImageAsync(meta, new PhotoReadOptions(), null, null, default);
+                if (decoded.SingleFrame is null)
+                {
+                    Console.WriteLine("FAILED! DecodeImageAsync returned null SingleFrame");
+                    return false;
+                }
+
+                using var skImg = SkiaCodec.FromMagick(decoded.SingleFrame, meta.SkiaColorSpace, isHdr: meta.IsHdr);
+                if (skImg is null)
+                {
+                    Console.WriteLine("FAILED! SkiaCodec.FromMagick returned null");
+                    return false;
+                }
+
+                using var bmp = SKBitmap.FromImage(skImg);
+                if (bmp.Width <= 0 || bmp.Height <= 0)
+                {
+                    Console.WriteLine("FAILED! SKBitmap.FromImage returned empty bitmap");
+                    return false;
+                }
+
+                // Check that center pixel is not black/corrupted
+                var centerColor = bmp.GetPixel(bmp.Width / 2, bmp.Height / 2);
+                if (isMultiPass && centerColor.Red == 0 && centerColor.Green == 0 && centerColor.Blue == 0)
+                {
+                    Console.WriteLine($"FAILED! Multi-pass matcap center pixel is completely black: RGBA({centerColor.Red}, {centerColor.Green}, {centerColor.Blue}, {centerColor.Alpha})");
+                    return false;
+                }
+
+                // Verify thumbnail generation via PhotoPreviewProvider
+                var previewProvider = new PhotoPreviewProvider();
+                using var thumbImg = await previewProvider.GetThumbnailAsync(meta, 80);
+                if (thumbImg is null)
+                {
+                    Console.WriteLine("FAILED! PhotoPreviewProvider.GetThumbnailAsync returned null");
+                    return false;
+                }
+                using var thumbBmp = SKBitmap.FromImage(thumbImg);
+                var thumbCenter = thumbBmp.GetPixel(thumbBmp.Width / 2, thumbBmp.Height / 2);
+                if (isMultiPass && thumbCenter.Red == 0 && thumbCenter.Green == 0 && thumbCenter.Blue == 0)
+                {
+                    Console.WriteLine($"FAILED! Thumbnail center pixel is completely black: RGBA({thumbCenter.Red}, {thumbCenter.Green}, {thumbCenter.Blue}, {thumbCenter.Alpha})");
+                    return false;
+                }
+
+                // End-to-end: Photo.LoadThumbnailAsync
+                var photo = new Photo { FilePath = filePath };
+                await photo.LoadThumbnailAsync(60, useCache: false);
+                if (photo.GalleryThumbnail is null)
+                {
+                    Console.WriteLine("FAILED! photo.GalleryThumbnail is null");
+                    return false;
+                }
+                Console.WriteLine($"  GalleryThumbnail size: {photo.GalleryThumbnail.PixelSize.Width}x{photo.GalleryThumbnail.PixelSize.Height}");
+
+                if (photo.GalleryThumbnail is Avalonia.Media.Imaging.WriteableBitmap wb)
+                {
+                    using var fb = wb.Lock();
+                    unsafe
+                    {
+                        var ptr = (byte*)fb.Address;
+                        var cx = wb.PixelSize.Width / 2;
+                        var cy = wb.PixelSize.Height / 2;
+                        var pixelOffset = cy * fb.RowBytes + cx * 4;
+                        var b = ptr[pixelOffset];
+                        var g = ptr[pixelOffset + 1];
+                        var r = ptr[pixelOffset + 2];
+                        var a = ptr[pixelOffset + 3];
+                        Console.WriteLine($"  GalleryThumbnail Center Pixel: BGRA({b}, {g}, {r}, {a})");
+                        if (isMultiPass && r == 0 && g == 0 && b == 0)
+                        {
+                            Console.WriteLine("FAILED! GalleryThumbnail center pixel is BLACK!");
+                            return false;
+                        }
+                    }
+                }
+
+                Console.WriteLine($"PASSED (Full: RGBA({centerColor.Red},{centerColor.Green},{centerColor.Blue}), Thumb: RGBA({thumbCenter.Red},{thumbCenter.Green},{thumbCenter.Blue}))");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("ALL EXR PIPELINE TESTS PASSED SUCCESSFULLY!");
+            Console.WriteLine();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"FAILED WITH EXCEPTION: {ex}");
+            return false;
         }
     }
 }

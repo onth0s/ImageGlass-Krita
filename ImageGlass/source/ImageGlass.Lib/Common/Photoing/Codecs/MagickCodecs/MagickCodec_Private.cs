@@ -1,4 +1,4 @@
-﻿/*
+/*
 ImageGlass - A Fast, Seamless Photo Viewer
 Copyright (C) 2010 - 2026 DUONG DIEU PHAP
 Project homepage: https://imageglass.org
@@ -20,6 +20,7 @@ using Avalonia;
 using ImageMagick;
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -595,4 +596,232 @@ public static partial class MagickCodec
         return null;
     }
 
+
+    /// <summary>
+    /// Represents channel indices for an RGB(A) pass in an OpenEXR image.
+    /// </summary>
+    private readonly record struct ExrPassMapping(int R, int G, int B, int A);
+
+
+    /// <summary>
+    /// Parses channel names from an OpenEXR file header.
+    /// Returns the list of channel names in the exact alphabetical order stored in the header's chlist attribute.
+    /// </summary>
+    private static List<string>? ParseExrChannels(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return null;
+
+        try
+        {
+            using var fs = File.OpenRead(filePath);
+            var headerLen = (int)Math.Min(fs.Length, 65536);
+            var buf = new byte[headerLen];
+            var read = fs.Read(buf, 0, headerLen);
+            var header = buf.AsSpan(0, read);
+
+            if (header.Length < 8) return null;
+
+            // Check OpenEXR magic: 0x76, 0x2f, 0x31, 0x01
+            if (header[0] != 0x76 || header[1] != 0x2f || header[2] != 0x31 || header[3] != 0x01)
+            {
+                return null;
+            }
+
+            var offset = 8;
+            while (offset < header.Length)
+            {
+                // Attribute name (null-terminated)
+                var nameStart = offset;
+                while (offset < header.Length && header[offset] != 0) offset++;
+                if (offset >= header.Length) break;
+                var attrNameLen = offset - nameStart;
+                offset++; // skip null terminator
+
+                if (attrNameLen == 0)
+                {
+                    // Null name marks end of header
+                    break;
+                }
+
+                // Attribute type (null-terminated)
+                var typeStart = offset;
+                while (offset < header.Length && header[offset] != 0) offset++;
+                if (offset >= header.Length) break;
+                offset++; // skip null terminator
+
+                // Attribute size (4 bytes little-endian)
+                if (offset + 4 > header.Length) break;
+                var attrSize = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(offset, 4));
+                offset += 4;
+
+                if (attrSize < 0 || offset + attrSize > header.Length) break;
+
+                var attrName = System.Text.Encoding.ASCII.GetString(header.Slice(nameStart, attrNameLen));
+                if (attrName == "channels")
+                {
+                    var chData = header.Slice(offset, attrSize);
+                    var channels = new List<string>();
+                    var chOffset = 0;
+                    while (chOffset < chData.Length)
+                    {
+                        var chNameStart = chOffset;
+                        while (chOffset < chData.Length && chData[chOffset] != 0) chOffset++;
+                        if (chOffset >= chData.Length) break;
+                        var chNameLen = chOffset - chNameStart;
+                        chOffset++; // skip null terminator
+                        if (chNameLen == 0) break; // end of chlist
+
+                        // 16 bytes: pixel_type (4), pLinear (1), reserved (3), xSampling (4), ySampling (4)
+                        if (chOffset + 16 > chData.Length) break;
+                        chOffset += 16;
+
+                        channels.Add(System.Text.Encoding.ASCII.GetString(chData.Slice(chNameStart, chNameLen)));
+                    }
+
+                    return channels;
+                }
+
+                offset += attrSize;
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+
+    /// <summary>
+    /// Resolves one or more RGB(A) passes from OpenEXR image attributes or header channel names.
+    /// Supports standard root channels (R, G, B, A), composite passes (Combined.*, Composite.*, RGBA.*),
+    /// and additive multi-pass layers (diffuse.*, specular.*, etc.).
+    /// </summary>
+    private static List<ExrPassMapping>? ResolveMagickExrPasses(MagickImage imgM, IUnsafePixelCollection<float> pixels)
+    {
+        // 1. Discover meta-channels from MagickImage attributes
+        var metaChannels = new List<(string Name, int Index)>();
+        for (var i = 0; i < 64; i++)
+        {
+            var attrVal = imgM.GetAttribute($"exr:meta-channel.{i}");
+            if (string.IsNullOrEmpty(attrVal)) break;
+
+            var pixelChannel = (PixelChannel)((int)PixelChannel.Meta0 + i);
+            var chIdx = (int)(pixels.GetChannelIndex(pixelChannel) ?? (uint)(3 + i));
+            metaChannels.Add((attrVal, chIdx));
+        }
+
+        if (metaChannels.Count > 0)
+        {
+            return ResolveExrPassesFromPairs(metaChannels);
+        }
+
+        // 2. Fallback: parse channel names directly from the EXR file header
+        var fileChannels = ParseExrChannels(imgM.FileName);
+        if (fileChannels is { Count: > 0 })
+        {
+            var pairs = new List<(string Name, int Index)>(fileChannels.Count);
+            for (var i = 0; i < fileChannels.Count; i++)
+            {
+                pairs.Add((fileChannels[i], i));
+            }
+            return ResolveExrPassesFromPairs(pairs);
+        }
+
+        return null;
+    }
+
+
+    /// <summary>
+    /// Resolves RGB(A) passes from a list of channel names and their respective buffer offsets.
+    /// </summary>
+    private static List<ExrPassMapping>? ResolveExrPassesFromPairs(IReadOnlyList<(string Name, int Index)> channels)
+    {
+        if (channels is null || channels.Count == 0) return null;
+
+        // Group channel indices by layer prefix
+        // e.g. "diffuse.R" -> layer="diffuse", channel="R", index=6
+        var layers = new Dictionary<string, (int R, int G, int B, int A, int Y)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (fullName, chIdx) in channels)
+        {
+            var dotIdx = fullName.LastIndexOf('.');
+            var layerName = dotIdx >= 0 ? fullName[..dotIdx] : string.Empty;
+            var chanName = dotIdx >= 0 ? fullName[(dotIdx + 1)..] : fullName;
+
+            if (!layers.TryGetValue(layerName, out var entry))
+            {
+                entry = (-1, -1, -1, -1, -1);
+            }
+
+            if (chanName.Equals("R", StringComparison.OrdinalIgnoreCase) || chanName.Equals("Red", StringComparison.OrdinalIgnoreCase))
+                entry.R = chIdx;
+            else if (chanName.Equals("G", StringComparison.OrdinalIgnoreCase) || chanName.Equals("Green", StringComparison.OrdinalIgnoreCase))
+                entry.G = chIdx;
+            else if (chanName.Equals("B", StringComparison.OrdinalIgnoreCase) || chanName.Equals("Blue", StringComparison.OrdinalIgnoreCase))
+                entry.B = chIdx;
+            else if (chanName.Equals("A", StringComparison.OrdinalIgnoreCase) || chanName.Equals("Alpha", StringComparison.OrdinalIgnoreCase))
+                entry.A = chIdx;
+            else if (chanName.Equals("Y", StringComparison.OrdinalIgnoreCase) || chanName.Equals("Gray", StringComparison.OrdinalIgnoreCase) || chanName.Equals("Luminance", StringComparison.OrdinalIgnoreCase))
+                entry.Y = chIdx;
+
+            layers[layerName] = entry;
+        }
+
+        // 1. Root channels (no layer prefix)
+        if (layers.TryGetValue(string.Empty, out var root) && (root.R >= 0 || root.Y >= 0))
+        {
+            if (root.R >= 0 && root.G >= 0 && root.B >= 0)
+                return [new ExrPassMapping(root.R, root.G, root.B, root.A)];
+            if (root.Y >= 0)
+                return [new ExrPassMapping(root.Y, root.Y, root.Y, root.A)];
+        }
+
+        // 2. Combined / Composite / RGBA / Beauty layer
+        var priorityLayers = new[] { "Combined", "Composite", "RGBA", "Beauty", "ViewLayer.Combined", "ViewLayer.Composite" };
+        foreach (var name in priorityLayers)
+        {
+            if (layers.TryGetValue(name, out var pass) && pass.R >= 0 && pass.G >= 0 && pass.B >= 0)
+            {
+                return [new ExrPassMapping(pass.R, pass.G, pass.B, pass.A)];
+            }
+        }
+
+        // 3. Multi-pass beauty layers (e.g. diffuse + specular)
+        var passes = new List<ExrPassMapping>();
+        foreach (var (name, pass) in layers)
+        {
+            if (string.IsNullOrEmpty(name)) continue;
+            if (pass.R >= 0 && pass.G >= 0 && pass.B >= 0)
+            {
+                var isDataPass = name.Contains("Normal", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("Depth", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("Position", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("Vector", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("UV", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("Crypto", StringComparison.OrdinalIgnoreCase);
+
+                if (!isDataPass)
+                {
+                    passes.Add(new ExrPassMapping(pass.R, pass.G, pass.B, pass.A));
+                }
+            }
+        }
+
+        if (passes.Count > 0)
+        {
+            return passes;
+        }
+
+        // Fallback: any layer with RGB
+        foreach (var (_, pass) in layers)
+        {
+            if (pass.R >= 0 && pass.G >= 0 && pass.B >= 0)
+            {
+                return [new ExrPassMapping(pass.R, pass.G, pass.B, pass.A)];
+            }
+        }
+
+        return null;
+    }
+
 }
+

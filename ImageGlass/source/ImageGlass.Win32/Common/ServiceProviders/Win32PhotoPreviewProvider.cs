@@ -35,9 +35,10 @@ public class Win32PhotoPreviewProvider : PhotoPreviewProvider
     /// </summary>
     public override async Task<SKImage?> GetPreviewAsync(PhotoMetadata meta, double? minHeight, CancellationToken token = default)
     {
-        // 0. don't use shell thumbnail if not allowed or if native vector rendering is preferred
+        // 0. don't use shell thumbnail if not allowed or if native vector rendering is preferred or for HDR images
         if (!Core.Config.EnableGalleryShellThumbnail
             || meta.IsVector
+            || meta.IsHdr
             || SvgCodec.IsSvgFile(meta.FilePath))
         {
             return await base.GetPreviewAsync(meta, minHeight, token);
@@ -77,7 +78,7 @@ public class Win32PhotoPreviewProvider : PhotoPreviewProvider
             using var thumbM = meta.GetEmbeddedPreview();
             if (thumbM is not null && thumbM.Height >= minHeight)
             {
-                imgPreview = SkiaCodec.FromMagick(thumbM, meta.SkiaColorSpace);
+                imgPreview = SkiaCodec.FromMagick(thumbM, meta.SkiaColorSpace, isHdr: meta.IsHdr);
                 needPreprocess = true;
             }
         }
