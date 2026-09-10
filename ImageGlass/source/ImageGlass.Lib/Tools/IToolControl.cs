@@ -42,4 +42,11 @@ public interface IToolControl : ITool
     /// </summary>
     Task ShowSettingsWindowAsync() => Task.CompletedTask;
 
+
+    /// <summary>
+    /// Handles keydown events before global application hotkeys are processed.
+    /// </summary>
+    /// <returns><c>true</c> if the tool handled the key event; otherwise <c>false</c>.</returns>
+    bool HandleKeyDown(Avalonia.Input.KeyEventArgs e) => false;
+
 }

@@ -181,7 +181,14 @@ public partial class MainWindow : PhWindow
             or MaskedTextBox
             or AutoCompleteBox) return;
 
-        // process app hotkeys
+        // 1. Offer key event to active hosted tool first
+        if (PART_MainView?.PART_ToolHost?.Tool?.HandleKeyDown(e) == true)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // 2. Process app hotkeys
         // press ESC: exit slideshow if it is running
         var hk = new Hotkey(e);
         if (hk.IsSame(Key.Escape) && Core.Slideshow?.IsRunning == true)

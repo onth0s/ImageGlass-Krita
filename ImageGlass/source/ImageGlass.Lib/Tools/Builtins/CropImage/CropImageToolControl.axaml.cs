@@ -74,6 +74,7 @@ public partial class CropImageToolControl : PhControl, IToolControl
         PART_BtnSaveAs.Click += PART_BtnSaveAs_Click;
         PART_BtnCrop.Click += PART_BtnCrop_Click;
         PART_BtnCopy.Click += PART_BtnCopy_Click;
+        PART_BtnSwapRatio.Click += PART_BtnSwapRatio_Click;
 
         // subscribe to aspect ratio change
         PART_CmdAspectRatio.SelectionChanged += PART_CmdAspectRatio_SelectionChanged;
@@ -115,6 +116,7 @@ public partial class CropImageToolControl : PhControl, IToolControl
         PART_BtnSaveAs.Click -= PART_BtnSaveAs_Click;
         PART_BtnCrop.Click -= PART_BtnCrop_Click;
         PART_BtnCopy.Click -= PART_BtnCopy_Click;
+        PART_BtnSwapRatio.Click -= PART_BtnSwapRatio_Click;
 
         PART_CmdAspectRatio.SelectionChanged -= PART_CmdAspectRatio_SelectionChanged;
 
@@ -165,8 +167,15 @@ public partial class CropImageToolControl : PhControl, IToolControl
     {
         if (_isUpdatingSelectionUI) return;
 
+        Options.IsSwappedOrientation = false;
         UpdateAspectRatioValues();
         LoadDefaultSelection();
+    }
+
+
+    private void PART_BtnSwapRatio_Click(object? sender, RoutedEventArgs e)
+    {
+        SwapOrientation();
     }
 
 
@@ -321,12 +330,178 @@ public partial class CropImageToolControl : PhControl, IToolControl
 
 
     /// <summary>
+    /// <inheritdoc/>
+    /// </summary>
+    public bool HandleKeyDown(KeyEventArgs e)
+    {
+        // Don't intercept if modifier keys (Ctrl/Alt) are held
+        var isCtrl = (e.KeyModifiers & KeyModifiers.Control) != 0;
+        var isAlt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
+
+        if (isCtrl || isAlt) return false;
+
+        switch (e.Key)
+        {
+            // F: Freeform ratio
+            case Key.F:
+                SetAspectRatio(SelectionAspectRatio.FreeRatio);
+                return true;
+
+            // O: Original ratio
+            case Key.O:
+                SetAspectRatio(SelectionAspectRatio.Original);
+                return true;
+
+            // X: Swap orientation
+            case Key.X:
+                SwapOrientation();
+                return true;
+
+            // 1: 1:1 Square
+            case Key.D1:
+            case Key.NumPad1:
+                SetAspectRatio(SelectionAspectRatio.Ratio1_1);
+                return true;
+
+            // 2: 16:9
+            case Key.D2:
+            case Key.NumPad2:
+                SetAspectRatio(SelectionAspectRatio.Ratio16_9);
+                return true;
+
+            // 3: 4:3
+            case Key.D3:
+            case Key.NumPad3:
+                SetAspectRatio(SelectionAspectRatio.Ratio4_3);
+                return true;
+
+            // 4: 3:2
+            case Key.D4:
+            case Key.NumPad4:
+                SetAspectRatio(SelectionAspectRatio.Ratio3_2);
+                return true;
+
+            // 5: 2:1
+            case Key.D5:
+            case Key.NumPad5:
+                SetAspectRatio(SelectionAspectRatio.Ratio2_1);
+                return true;
+
+            // 6: Custom
+            case Key.D6:
+            case Key.NumPad6:
+                SetAspectRatio(SelectionAspectRatio.Custom);
+                return true;
+
+            // C or Enter: Execute Crop
+            case Key.C:
+            case Key.Enter:
+                if (PART_BtnCrop.IsEnabled)
+                {
+                    PART_BtnCrop_Click(this, new RoutedEventArgs());
+                    return true;
+                }
+                return false;
+
+            // Escape: Reset selection if active
+            case Key.Escape:
+                if (Viewer.SourceSelection.Width > 0 && Viewer.SourceSelection.Height > 0)
+                {
+                    Viewer.SourceSelection = default;
+                    Viewer.Refresh(false);
+                    return true;
+                }
+                return false;
+        }
+
+        return false;
+    }
+
+
+    /// <summary>
+    /// Swaps the current aspect ratio between horizontal and vertical orientations.
+    /// </summary>
+    public void SwapOrientation()
+    {
+        var ratio = PART_CmdAspectRatio != null
+            ? (SelectionAspectRatio)PART_CmdAspectRatio.SelectedIndex
+            : Options.AspectRatio;
+        if (ratio == SelectionAspectRatio.FreeRatio) return;
+
+        // Swap the ratio values
+        var ratioW = Options.AspectRatioValues[1];
+        var ratioH = Options.AspectRatioValues[0];
+        if (ratioW <= 0 || ratioH <= 0)
+        {
+            ratioW = 1;
+            ratioH = 1;
+        }
+
+        Options.AspectRatioValues = [ratioW, ratioH];
+        Options.IsSwappedOrientation = !Options.IsSwappedOrientation;
+
+        // update custom ratio inputs if visible
+        _isUpdatingSelectionUI = true;
+        if (PART_NumRatioFrom != null) PART_NumRatioFrom.Value = ratioW;
+        if (PART_NumRatioTo != null) PART_NumRatioTo.Value = ratioH;
+        _isUpdatingSelectionUI = false;
+
+        // update viewer
+        Viewer.SelectionAspectRatio = new Size(ratioW, ratioH);
+
+        // Flip current selection rectangle if one exists, centered on current midpoint
+        var curSel = Viewer.SourceSelection;
+        if (curSel.Width > 0 && curSel.Height > 0)
+        {
+            var srcW = (int)Viewer.BitmapSize.Width;
+            var srcH = (int)Viewer.BitmapSize.Height;
+
+            var centerX = curSel.X + curSel.Width / 2.0;
+            var centerY = curSel.Y + curSel.Height / 2.0;
+
+            // Compute new size matching the swapped ratio
+            var newSize = GetSizeWithAspectRatio((int)curSel.Height, (int)curSel.Width);
+            var newW = newSize.Width;
+            var newH = newSize.Height;
+
+            var newX = Math.Clamp(centerX - newW / 2.0, 0, Math.Max(0, srcW - newW));
+            var newY = Math.Clamp(centerY - newH / 2.0, 0, Math.Max(0, srcH - newH));
+
+            Viewer.SourceSelection = new Rect(newX, newY, newW, newH);
+            Viewer.Refresh(false);
+        }
+        else
+        {
+            LoadDefaultSelection();
+        }
+    }
+
+
+    /// <summary>
+    /// Programmatically changes the active aspect ratio.
+    /// </summary>
+    private void SetAspectRatio(SelectionAspectRatio ratio)
+    {
+        _isUpdatingSelectionUI = true;
+        if (PART_CmdAspectRatio != null) PART_CmdAspectRatio.SelectedIndex = (int)ratio;
+        Options.AspectRatio = ratio;
+        _isUpdatingSelectionUI = false;
+
+        Options.IsSwappedOrientation = false;
+        UpdateAspectRatioValues();
+        LoadDefaultSelection();
+    }
+
+
+    /// <summary>
     /// Updates the viewer's <see cref="ViewerControl.SelectionAspectRatio"/>
     /// based on the current aspect ratio selection.
     /// </summary>
     private void UpdateAspectRatioValues()
     {
-        var ratio = (SelectionAspectRatio)PART_CmdAspectRatio.SelectedIndex;
+        var ratio = PART_CmdAspectRatio != null
+            ? (SelectionAspectRatio)PART_CmdAspectRatio.SelectedIndex
+            : Options.AspectRatio;
         var ratioW = Options.AspectRatioValues[0];
         var ratioH = Options.AspectRatioValues[1];
 
@@ -344,8 +519,8 @@ public partial class CropImageToolControl : PhControl, IToolControl
         }
         else if (ratio == SelectionAspectRatio.Custom)
         {
-            ratioW = (int)(PART_NumRatioFrom.Value ?? 1);
-            ratioH = (int)(PART_NumRatioTo.Value ?? 1);
+            ratioW = (int)((PART_NumRatioFrom?.Value) ?? (Options.AspectRatioValues.Length > 0 ? Options.AspectRatioValues[0] : 1));
+            ratioH = (int)((PART_NumRatioTo?.Value) ?? (Options.AspectRatioValues.Length > 1 ? Options.AspectRatioValues[1] : 1));
 
             // default to the image's simplified ratio if no custom values set
             if (ratioW <= 0 || ratioH <= 0)
@@ -372,10 +547,17 @@ public partial class CropImageToolControl : PhControl, IToolControl
             ratioH = value[1];
         }
 
+        if (Options.IsSwappedOrientation && ratio != SelectionAspectRatio.FreeRatio && ratio != SelectionAspectRatio.Ratio1_1)
+        {
+            var temp = ratioW;
+            ratioW = ratioH;
+            ratioH = temp;
+        }
+
         // update the custom ratio UI
         _isUpdatingSelectionUI = true;
-        PART_NumRatioFrom.Value = ratioW;
-        PART_NumRatioTo.Value = ratioH;
+        if (PART_NumRatioFrom != null) PART_NumRatioFrom.Value = ratioW;
+        if (PART_NumRatioTo != null) PART_NumRatioTo.Value = ratioH;
         _isUpdatingSelectionUI = false;
 
         // save to settings
@@ -403,15 +585,27 @@ public partial class CropImageToolControl : PhControl, IToolControl
     /// </summary>
     private void UpdateCustomRatioVisibility()
     {
-        var ratio = (SelectionAspectRatio)PART_CmdAspectRatio.SelectedIndex;
+        var ratio = PART_CmdAspectRatio != null
+            ? (SelectionAspectRatio)PART_CmdAspectRatio.SelectedIndex
+            : Options.AspectRatio;
 
         var showCustomRatio = ratio is SelectionAspectRatio.Original
             or SelectionAspectRatio.Custom;
-        PART_NumRatioFrom.IsVisible = showCustomRatio;
-        PART_NumRatioTo.IsVisible = showCustomRatio;
+        if (PART_NumRatioFrom != null)
+        {
+            PART_NumRatioFrom.IsVisible = showCustomRatio;
+            PART_NumRatioFrom.IsEnabled = ratio == SelectionAspectRatio.Custom;
+        }
+        if (PART_NumRatioTo != null)
+        {
+            PART_NumRatioTo.IsVisible = showCustomRatio;
+            PART_NumRatioTo.IsEnabled = ratio == SelectionAspectRatio.Custom;
+        }
 
-        PART_NumRatioFrom.IsEnabled = ratio == SelectionAspectRatio.Custom;
-        PART_NumRatioTo.IsEnabled = ratio == SelectionAspectRatio.Custom;
+        if (PART_BtnSwapRatio != null)
+        {
+            PART_BtnSwapRatio.IsEnabled = ratio != SelectionAspectRatio.FreeRatio;
+        }
     }
 
 
@@ -490,10 +684,10 @@ public partial class CropImageToolControl : PhControl, IToolControl
         }
 
         // validate bounds
-        x = Math.Max(0, x);
-        y = Math.Max(0, y);
-        w = Math.Max(0, w);
-        h = Math.Max(0, h);
+        x = Math.Clamp(x, 0, Math.Max(0, srcW - w));
+        y = Math.Clamp(y, 0, Math.Max(0, srcH - h));
+        w = Math.Clamp(w, 0, srcW);
+        h = Math.Clamp(h, 0, srcH);
 
         Viewer.SourceSelection = new Rect(x, y, w, h);
         Viewer.Refresh(false);
@@ -509,42 +703,41 @@ public partial class CropImageToolControl : PhControl, IToolControl
         var ratioH = Options.AspectRatioValues[1];
         if (ratioW <= 0 || ratioH <= 0) return new Size(width, height);
 
-        var wRatio = 1.0 * ratioW / ratioH;
-        var hRatio = 1.0 * ratioH / ratioW;
+        var srcW = Viewer.BitmapSize.Width;
+        var srcH = Viewer.BitmapSize.Height;
+        if (srcW <= 0 || srcH <= 0) return new Size(width, height);
 
-        var srcW = (int)Viewer.BitmapSize.Width;
-        var srcH = (int)Viewer.BitmapSize.Height;
+        var targetRatio = (double)ratioW / ratioH; // w / h
 
-        var w = (double)width;
-        var h = (double)height;
-
-        // scale to the aspect ratio
-        if (w > h)
+        var maxW = Math.Min((double)width, srcW);
+        var maxH = Math.Min((double)height, srcH);
+        if (maxW <= 0 || maxH <= 0)
         {
-            w = h * wRatio;
-        }
-        else if (w < h)
-        {
-            h = w * hRatio;
+            maxW = srcW;
+            maxH = srcH;
         }
 
-        // if new size is larger than source size
-        if (w >= srcW || h >= srcH)
-        {
-            var srcWRatio = 1.0 * srcW / srcH;
-            var srcHRatio = 1.0 * srcH / srcW;
+        var w = maxW;
+        var h = w / targetRatio;
 
-            if (srcWRatio >= wRatio)
-            {
-                w = wRatio * srcH;
-            }
-            else if (srcHRatio >= hRatio)
-            {
-                h = hRatio * srcW;
-            }
+        if (h > maxH)
+        {
+            h = maxH;
+            w = h * targetRatio;
         }
 
-        return new Size(w, h);
+        if (w > srcW)
+        {
+            w = srcW;
+            h = w / targetRatio;
+        }
+        if (h > srcH)
+        {
+            h = srcH;
+            w = h * targetRatio;
+        }
+
+        return new Size(Math.Max(1, Math.Round(w)), Math.Max(1, Math.Round(h)));
     }
 
 

@@ -34,15 +34,21 @@
                 <ComboBoxItem>[Custom]</ComboBoxItem>
                 <ComboBoxItem>[Original]</ComboBoxItem>
                 <ComboBoxItem>1:1</ComboBoxItem>
-                <ComboBoxItem>1:2</ComboBoxItem>
-                <ComboBoxItem>2:1</ComboBoxItem>
-                <ComboBoxItem>2:3</ComboBoxItem>
-                <ComboBoxItem>3:2</ComboBoxItem>
-                <ComboBoxItem>3:4</ComboBoxItem>
-                <ComboBoxItem>4:3</ComboBoxItem>
-                <ComboBoxItem>9:16</ComboBoxItem>
                 <ComboBoxItem>16:9</ComboBoxItem>
+                <ComboBoxItem>4:3</ComboBoxItem>
+                <ComboBoxItem>3:2</ComboBoxItem>
+                <ComboBoxItem>2:1</ComboBoxItem>
             </ComboBox>
+
+            <!--  Swap orientation button  -->
+            <ui:PhButton
+                x:Name="PART_BtnSwapRatio"
+                MinWidth="32"
+                MinHeight="32"
+                Padding="6"
+                VerticalAlignment="Center"
+                IconData="{StaticResource IconSwapOrientation}"
+                ToolTip.Tip="Swap orientation (Horizontal / Vertical) [X]" />
 
             <!--  Custom ratio  -->
             <NumericUpDown

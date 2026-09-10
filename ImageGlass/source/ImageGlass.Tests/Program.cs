@@ -34,6 +34,13 @@ class Program
             return 1;
         }
 
+        var cropPass = RunCropAspectRatioTests();
+        if (!cropPass)
+        {
+            Console.WriteLine("CROP ASPECT RATIO TESTS FAILED!");
+            return 1;
+        }
+
         Console.WriteLine("=========================================================================");
         Console.WriteLine("  AUTOMATED DOUBLE-CLICK PIVOT ZOOM & UNIQUE COLOR MATCH TEST SUITE");
         Console.WriteLine("=========================================================================");
@@ -512,6 +519,216 @@ class Program
 
             Console.WriteLine();
             Console.WriteLine("ALL EXR PIPELINE TESTS PASSED SUCCESSFULLY!");
+            Console.WriteLine();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"FAILED WITH EXCEPTION: {ex}");
+            return false;
+        }
+    }
+
+    static bool RunCropAspectRatioTests()
+    {
+        Console.WriteLine("=========================================================================");
+        Console.WriteLine("  AUTOMATED CROP TOOL ASPECT RATIO & SQUARE IMAGE TEST SUITE");
+        Console.WriteLine("=========================================================================");
+        Console.WriteLine();
+
+        try
+        {
+            var propBitmapSize = typeof(ViewerControl).GetProperty("BitmapSize", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var miLoadDefaultSelection = typeof(ImageGlass.Tools.CropImageToolControl).GetMethod("LoadDefaultSelection", BindingFlags.NonPublic | BindingFlags.Instance);
+            var miGetSizeWithAspectRatio = typeof(ImageGlass.Tools.CropImageToolControl).GetMethod("GetSizeWithAspectRatio", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (miLoadDefaultSelection is null || miGetSizeWithAspectRatio is null)
+            {
+                Console.WriteLine("FAILED! Could not find CropImageToolControl internal methods via reflection.");
+                return false;
+            }
+
+            var testImages = new (string Name, double Width, double Height)[]
+            {
+                ("Square Image (544x544) - CROP-ERROR.jpg", 544, 544),
+                ("Landscape Image (1688x665) - CROP-WORKS.png", 1688, 665),
+                ("Portrait Image (600x1800)", 600, 1800),
+            };
+
+            var testRatios = new (ImageGlass.Tools.SelectionAspectRatio Ratio, int W, int H, string Desc)[]
+            {
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio16_9, 16, 9, "16:9 Landscape"),
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio9_16, 9, 16, "9:16 Portrait"),
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio4_3, 4, 3, "4:3 Landscape"),
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio3_4, 3, 4, "3:4 Portrait"),
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio2_1, 2, 1, "2:1 Wide"),
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio1_2, 1, 2, "1:2 Tall"),
+                (ImageGlass.Tools.SelectionAspectRatio.Ratio1_1, 1, 1, "1:1 Square"),
+                (ImageGlass.Tools.SelectionAspectRatio.Custom, 5, 2, "5:2 Custom Ultra-Wide"),
+            };
+
+            foreach (var img in testImages)
+            {
+                Console.WriteLine($"--- Testing Image: {img.Name} ({img.Width}x{img.Height}) ---");
+
+                var viewer = new ViewerControl();
+                propBitmapSize?.SetValue(viewer, new Size(img.Width, img.Height));
+
+                var cropControl = (ImageGlass.Tools.CropImageToolControl)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ImageGlass.Tools.CropImageToolControl));
+                cropControl.Viewer = viewer;
+
+                var config = new ImageGlass.Tools.CropImageConfig();
+                typeof(ImageGlass.Tools.CropImageToolControl).GetProperty("Settings", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(cropControl, config);
+
+                foreach (var r in testRatios)
+                {
+                    cropControl.Options.AspectRatio = r.Ratio;
+                    cropControl.Options.AspectRatioValues = [r.W, r.H];
+                    cropControl.Options.InitSelectionType = ImageGlass.Tools.DefaultSelectionType.Select50Percent;
+                    cropControl.Options.AutoCenterSelection = true;
+
+                    miLoadDefaultSelection.Invoke(cropControl, null);
+
+                    var sel = viewer.SourceSelection;
+                    double expectedRatio = (double)r.W / r.H;
+                    double actualRatio = sel.Width / sel.Height;
+                    double ratioDiff = Math.Abs(actualRatio - expectedRatio);
+
+                    Console.WriteLine($"  Ratio {r.Desc,-22}: Sel=[{sel.X:0},{sel.Y:0}, {sel.Width:0}x{sel.Height:0}] Ratio={actualRatio:0.000} (Exp={expectedRatio:0.000}, Err={ratioDiff:0.000})");
+
+                    // 1. Dimensions must not be zero
+                    if (sel.Width <= 0 || sel.Height <= 0)
+                    {
+                        Console.WriteLine($"  FAILED: Selection size is zero!");
+                        return false;
+                    }
+
+                    // 2. Selection must stay within image bounds
+                    if (sel.X < 0 || sel.Y < 0 || sel.Right > img.Width || sel.Bottom > img.Height)
+                    {
+                        Console.WriteLine($"  FAILED: Selection bounds [{sel.X},{sel.Y},{sel.Right},{sel.Bottom}] overflow image [{img.Width}x{img.Height}]!");
+                        return false;
+                    }
+
+                    // 3. Aspect ratio match within integer rounding tolerance (< 0.05)
+                    if (ratioDiff > 0.05)
+                    {
+                        Console.WriteLine($"  FAILED: Aspect ratio mismatch! Expected {expectedRatio:0.000}, got {actualRatio:0.000}");
+                        return false;
+                    }
+                }
+
+                Console.WriteLine($"  PASSED for {img.Name}");
+                Console.WriteLine();
+            }
+
+            // Test SwapOrientation explicitly
+            Console.WriteLine("--- Testing SwapOrientation (Landscape <-> Portrait) ---");
+            {
+                var viewer = new ViewerControl();
+                propBitmapSize?.SetValue(viewer, new Size(1920, 1080));
+
+                var cropControl = (ImageGlass.Tools.CropImageToolControl)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ImageGlass.Tools.CropImageToolControl));
+                cropControl.Viewer = viewer;
+
+                var config = new ImageGlass.Tools.CropImageConfig();
+                typeof(ImageGlass.Tools.CropImageToolControl).GetProperty("Settings", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(cropControl, config);
+
+                cropControl.Options.AspectRatio = ImageGlass.Tools.SelectionAspectRatio.Ratio16_9;
+                cropControl.Options.AspectRatioValues = [16, 9];
+                cropControl.Options.InitSelectionType = ImageGlass.Tools.DefaultSelectionType.Select50Percent;
+                cropControl.Options.AutoCenterSelection = true;
+                miLoadDefaultSelection.Invoke(cropControl, null);
+
+                var selBefore = viewer.SourceSelection;
+                Console.WriteLine($"  Initial 16:9: Sel=[{selBefore.X:0},{selBefore.Y:0}, {selBefore.Width:0}x{selBefore.Height:0}] (Ratio={selBefore.Width / selBefore.Height:0.000})");
+
+                // Swap to 9:16
+                cropControl.SwapOrientation();
+                var selSwapped = viewer.SourceSelection;
+                Console.WriteLine($"  Swapped 9:16: Sel=[{selSwapped.X:0},{selSwapped.Y:0}, {selSwapped.Width:0}x{selSwapped.Height:0}] (Ratio={selSwapped.Width / selSwapped.Height:0.000})");
+
+                double swappedRatio = selSwapped.Width / selSwapped.Height;
+                if (Math.Abs(swappedRatio - (9.0 / 16.0)) > 0.05)
+                {
+                    Console.WriteLine($"  FAILED: Swapped ratio mismatch! Expected 0.563, got {swappedRatio:0.000}");
+                    return false;
+                }
+
+                // Swap back to 16:9
+                cropControl.SwapOrientation();
+                var selSwappedBack = viewer.SourceSelection;
+                Console.WriteLine($"  Swapped back 16:9: Sel=[{selSwappedBack.X:0},{selSwappedBack.Y:0}, {selSwappedBack.Width:0}x{selSwappedBack.Height:0}] (Ratio={selSwappedBack.Width / selSwappedBack.Height:0.000})");
+
+                double backRatio = selSwappedBack.Width / selSwappedBack.Height;
+                if (Math.Abs(backRatio - (16.0 / 9.0)) > 0.05)
+                {
+                    Console.WriteLine($"  FAILED: Swapped back ratio mismatch! Expected 1.778, got {backRatio:0.000}");
+                    return false;
+                }
+                Console.WriteLine("  SwapOrientation PASSED");
+                Console.WriteLine();
+            }
+
+            // Test Contextual KeyDown handling
+            Console.WriteLine("--- Testing Contextual Shortcuts via HandleKeyDown ---");
+            {
+                var viewer = new ViewerControl();
+                propBitmapSize?.SetValue(viewer, new Size(1000, 1000));
+
+                var cropControl = (ImageGlass.Tools.CropImageToolControl)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ImageGlass.Tools.CropImageToolControl));
+                cropControl.Viewer = viewer;
+
+                var config = new ImageGlass.Tools.CropImageConfig();
+                typeof(ImageGlass.Tools.CropImageToolControl).GetProperty("Settings", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(cropControl, config);
+
+                // 1. Press 'F' (Freeform)
+                var keyEventF = new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.F };
+                bool handledF = cropControl.HandleKeyDown(keyEventF);
+                Console.WriteLine($"  Press 'F' (Freeform): Handled={handledF}, AspectRatio={cropControl.Options.AspectRatio}");
+                if (!handledF || cropControl.Options.AspectRatio != ImageGlass.Tools.SelectionAspectRatio.FreeRatio)
+                {
+                    Console.WriteLine("  FAILED: 'F' key did not switch to FreeRatio!");
+                    return false;
+                }
+
+                // 2. Press '2' (16:9)
+                var keyEvent2 = new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.D2 };
+                bool handled2 = cropControl.HandleKeyDown(keyEvent2);
+                Console.WriteLine($"  Press '2' (16:9): Handled={handled2}, AspectRatio={cropControl.Options.AspectRatio}");
+                if (!handled2 || cropControl.Options.AspectRatio != ImageGlass.Tools.SelectionAspectRatio.Ratio16_9)
+                {
+                    Console.WriteLine("  FAILED: '2' key did not switch to Ratio16_9!");
+                    return false;
+                }
+
+                // 3. Press 'X' (Swap)
+                var keyEventX = new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.X };
+                bool handledX = cropControl.HandleKeyDown(keyEventX);
+                Console.WriteLine($"  Press 'X' (Swap): Handled={handledX}, RatioValues=[{cropControl.Options.AspectRatioValues[0]},{cropControl.Options.AspectRatioValues[1]}]");
+                if (!handledX || cropControl.Options.AspectRatioValues[0] != 9 || cropControl.Options.AspectRatioValues[1] != 16)
+                {
+                    Console.WriteLine("  FAILED: 'X' key did not swap ratio values to 9:16!");
+                    return false;
+                }
+
+                // 4. Press 'Escape' (Reset selection)
+                viewer.SourceSelection = new Rect(100, 100, 200, 200);
+                var keyEventEsc = new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.Escape };
+                bool handledEsc = cropControl.HandleKeyDown(keyEventEsc);
+                bool isCleared = viewer.SourceSelection.Width == 0 && viewer.SourceSelection.Height == 0;
+                Console.WriteLine($"  Press 'Escape' (Reset): Handled={handledEsc}, SelectionCleared={isCleared}");
+                if (!handledEsc || !isCleared)
+                {
+                    Console.WriteLine("  FAILED: 'Escape' key did not clear active selection!");
+                    return false;
+                }
+
+                Console.WriteLine("  Contextual Shortcuts PASSED");
+                Console.WriteLine();
+            }
+
+            Console.WriteLine("ALL CROP ASPECT RATIO & SHORTCUT TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine();
             return true;
         }

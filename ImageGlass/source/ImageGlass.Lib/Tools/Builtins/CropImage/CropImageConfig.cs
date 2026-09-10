@@ -127,19 +127,33 @@ public class CropImageConfig() : PhReactive
 
 
     /// <summary>
+    /// Gets, sets whether the aspect ratio is swapped between horizontal and vertical orientation.
+    /// </summary>
+    public bool IsSwappedOrientation
+    {
+        get; set
+        {
+            if (field == value) return;
+            field = value;
+            _ = OnPropertyChanged();
+        }
+    } = false;
+
+
+    /// <summary>
     /// Gets the aspect ratio value.
     /// </summary>
     public static Dictionary<SelectionAspectRatio, int[]> AspectRatioValue => new(9)
     {
         { SelectionAspectRatio.Ratio1_1,    [1, 1] },
-        { SelectionAspectRatio.Ratio1_2,    [1, 2] },
-        { SelectionAspectRatio.Ratio2_1,    [2, 1] },
-        { SelectionAspectRatio.Ratio2_3,    [2, 3] },
-        { SelectionAspectRatio.Ratio3_2,    [3, 2] },
-        { SelectionAspectRatio.Ratio3_4,    [3, 4] },
-        { SelectionAspectRatio.Ratio4_3,    [4, 3] },
-        { SelectionAspectRatio.Ratio9_16,   [9, 16] },
         { SelectionAspectRatio.Ratio16_9,   [16, 9] },
+        { SelectionAspectRatio.Ratio4_3,    [4, 3] },
+        { SelectionAspectRatio.Ratio3_2,    [3, 2] },
+        { SelectionAspectRatio.Ratio2_1,    [2, 1] },
+        { SelectionAspectRatio.Ratio1_2,    [1, 2] },
+        { SelectionAspectRatio.Ratio2_3,    [2, 3] },
+        { SelectionAspectRatio.Ratio3_4,    [3, 4] },
+        { SelectionAspectRatio.Ratio9_16,   [9, 16] },
     };
 
 }

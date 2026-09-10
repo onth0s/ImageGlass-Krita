@@ -28,14 +28,14 @@ public enum SelectionAspectRatio
     Custom = 1,
     Original = 2,
     Ratio1_1 = 3,
-    Ratio1_2 = 4,
-    Ratio2_1 = 5,
-    Ratio2_3 = 6,
-    Ratio3_2 = 7,
-    Ratio3_4 = 8,
-    Ratio4_3 = 9,
-    Ratio9_16 = 10,
-    Ratio16_9 = 11,
+    Ratio16_9 = 4,
+    Ratio4_3 = 5,
+    Ratio3_2 = 6,
+    Ratio2_1 = 7,
+    Ratio1_2 = 8,
+    Ratio2_3 = 9,
+    Ratio3_4 = 10,
+    Ratio9_16 = 11,
 }
 
 
